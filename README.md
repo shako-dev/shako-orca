@@ -64,7 +64,7 @@ macOS or Linux (on Windows, Orca in WSL), `curl`, python3 3.10 or newer for the 
 ## Develop
 
 ```
-node --test test/shako.test.mjs
+node --test test/shako.test.mjs test/vm-options.test.mjs
 orca plugin validate . --json
 orca plugin check . --json
 orca plugin dev load .

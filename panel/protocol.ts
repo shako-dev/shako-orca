@@ -47,9 +47,20 @@ export type ShakoState = {
   orcaHostsKnown: boolean
   /** The last `shako update` this run of the worker did. */
   cliUpdate: { at: number; ok: boolean; message: string } | null
+  /** Totals of the VMs, for the Overview. */
+  overview: Overview | null
+  /** VM name -> what runs on it now: creating, sleeping or waking. */
+  busy: Record<string, string>
+  /** Why the last create failed, from the choice check or the CLI. */
+  createError: string | null
   credit: Credit | null
   updatedAt: number | null
 }
+
+export type Overview = { total: number; awake: number; asleep: number; other: number; ramGb: number; diskGb: number }
+
+/** A new VM: the same choices as the web workspace's New VM form. */
+export type NewVm = { name: string; size: string; agents: string[]; desktop: boolean }
 
 export type ShakoRequest =
   | 'shako.refresh'
@@ -66,6 +77,9 @@ declare module 'orca' {
     'shako.installSkill': { input: Record<string, never>; output: ShakoState }
     'shako.login': { input: Record<string, never>; output: ShakoState }
     'shako.cancelLogin': { input: Record<string, never>; output: ShakoState }
+    'shako.createVm': { input: NewVm; output: ShakoState }
+    'shako.power': { input: { name: string; action: 'sleep' | 'wake' }; output: ShakoState }
+    'shako.copy': { input: { text: string }; output: { copied: boolean } }
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- declaration merging needs an interface
   interface PluginPanelEvents {

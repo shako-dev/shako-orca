@@ -209,6 +209,30 @@ export function memoryGb(size) {
   return match[2] === 'G' ? Number(match[1]) : Number(match[1]) / 1024
 }
 
+/** GB of disk from a `vm ls` DISK such as "20G". */
+export function diskGb(disk) {
+  const match = /^(\d+(?:\.\d+)?)G$/.exec(String(disk))
+  return match ? Number(match[1]) : 0
+}
+
+/** The overview: how many VMs, awake and asleep, and the RAM and disk they have. */
+export function overview(vms) {
+  const awake = vms.filter((vm) => vm.state === 'awake').length
+  const asleep = vms.filter((vm) => vm.state === 'asleep').length
+  const sum = (f) => Math.round(vms.reduce((total, vm) => total + f(vm), 0) * 10) / 10
+  return { total: vms.length, awake, asleep, other: vms.length - awake - asleep,
+    ramGb: sum((vm) => memoryGb(vm.size)), diskGb: sum((vm) => diskGb(vm.disk)) }
+}
+
+/** Commands that put text on the clipboard, first that runs wins: pbcopy on macOS; Linux has several. */
+export function copyCommands(platform) {
+  if (platform === 'darwin') return [['pbcopy', []]]
+  if (platform === 'linux') {
+    return [['wl-copy', []], ['xclip', ['-selection', 'clipboard']], ['xsel', ['--clipboard', '--input']]]
+  }
+  return []
+}
+
 /** What the VMs cost per hour now: awake RAM at the awake rate, asleep RAM at the asleep rate. */
 export function spendPerHour(vms, rates) {
   if (!rates) return null

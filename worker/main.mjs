@@ -11,11 +11,13 @@ import {
   WORKSPACE_URL,
   cliCandidates,
   commandPath,
+  copyCommands,
   creditSummary,
   keyName,
   lastLine,
   orcaCliCandidates,
   orcaHostsForVms,
+  overview,
   parseVmUsage,
   parseCredit,
   parseLoggedIn,
@@ -30,6 +32,7 @@ import {
   statusText,
   updateDue
 } from './shako.mjs'
+import { createArgs } from '../shared/vm-options.mjs'
 
 const HOME = homedir()
 const SUPPORTED = process.platform !== 'win32'
@@ -49,18 +52,19 @@ export function deactivate() {
 }
 
 /** Runs a command to its end. Never throws: a failure is a non-zero `code` with its output. */
-function run(file, args, { timeoutMs = 60_000, onOutput, onSpawn } = {}) {
+function run(file, args, { timeoutMs = 60_000, onOutput, onSpawn, input } = {}) {
   return new Promise((resolve) => {
     let stdout = ''
     let stderr = ''
     let child
     try {
-      child = spawn(file, args, { env: ENV, stdio: ['ignore', 'pipe', 'pipe'] })
+      child = spawn(file, args, { env: ENV, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] })
     } catch (error) {
       resolve({ code: -1, stdout, stderr: String(error) })
       return
     }
     onSpawn?.(child)
+    if (input !== undefined) child.stdin.end(input)
     const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs)
     const take = (chunk, toErr) => {
       const text = chunk.toString()
@@ -150,6 +154,9 @@ export default async function activate(orca) {
     vms: [],
     vmsError: null,
     orcaHostsKnown: false,
+    overview: null,
+    busy: {},
+    createError: null,
     cliUpdate: null,
     credit: null,
     updatedAt: null
@@ -168,6 +175,7 @@ export default async function activate(orca) {
     state.account = { signedIn: false, tenant: null, email: null, sshDomain: null }
     state.vms = []
     state.vmsError = null
+    state.overview = null
     state.credit = null
     if (!state.cli.found) return
     const whoami = await run(state.cli.path, ['whoami'], { timeoutMs: 30_000 })
@@ -201,6 +209,7 @@ export default async function activate(orca) {
         orcaHost: hosts ? (hosts[vm.name] ?? null) : null
       }))
       state.orcaHostsKnown = hosts !== null
+      state.overview = overview(state.vms)
     }
     state.credit = credit.code === 0 ? creditSummary(parseCredit(credit.stdout), state.vms, me.rates) : null
   }
@@ -330,6 +339,52 @@ export default async function activate(orca) {
     return state
   })
   orca.panels.handle('shako.cancelLogin', cancelLogin)
+
+  // A new VM, with the same choices as the web workspace (shared/vm-options.mjs checks them first).
+  // --no-wait: the VM shows at once, and boots in a few seconds; the refreshes after show it awake.
+  orca.panels.handle('shako.createVm', async (input) => {
+    let args
+    try {
+      args = createArgs(input ?? {})
+    } catch (error) {
+      state.createError = error.message
+      await publish()
+      return state
+    }
+    state.createError = null
+    state.busy = { ...state.busy, [input.name]: 'creating' }
+    await publish()
+    const result = await run(state.cli.path, args, { timeoutMs: 180_000 })
+    delete state.busy[input.name]
+    state.createError = result.code === 0 ? null : lastLine(result.stderr || result.stdout) || 'create failed'
+    await refresh()
+    if (result.code === 0) setTimeout(() => void refresh(), 15_000)
+    return state
+  })
+
+  // Sleep or wake one VM: the pause button on its card.
+  orca.panels.handle('shako.power', async (input) => {
+    const name = String(input?.name ?? '')
+    const verb = input?.action === 'wake' ? 'wake' : 'sleep'
+    if (!state.vms.some((vm) => vm.name === name)) return state
+    state.busy = { ...state.busy, [name]: verb === 'wake' ? 'waking' : 'sleeping' }
+    await publish()
+    const result = await run(state.cli.path, ['vm', verb, name], { timeoutMs: 120_000 })
+    delete state.busy[name]
+    if (result.code !== 0) orca.log(`vm ${verb} ${name}: ${lastLine(result.stderr || result.stdout)}`)
+    await refresh()
+    return state
+  })
+
+  // Copy a VM's ssh command: a panel has no clipboard, so the worker uses the system's own tool.
+  orca.panels.handle('shako.copy', async (input) => {
+    const text = String(input?.text ?? '').slice(0, 512)
+    for (const [file, args] of copyCommands(process.platform)) {
+      const result = await run(file, args, { timeoutMs: 10_000, input: text })
+      if (result.code === 0) return { copied: true }
+    }
+    return { copied: false }
+  })
 
   // The status bar item runs this. It shows the panel, and when nobody is signed in it starts sign-in.
   orca.commands.register('shako.status', async () => {

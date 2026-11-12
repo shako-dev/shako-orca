@@ -4,7 +4,7 @@
   "execution": "trusted-worker",
   "id": "shako",
   "name": "Shako",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Cloud VMs that sleep when idle. Installs the shako CLI and the agent skill, signs you up or in, and shows your VMs and credit. Your agents create VMs and host apps.",
   "author": { "name": "Shako", "url": "https://shako.dev" },
   "repository": "https://github.com/shako-dev/shako-orca",
