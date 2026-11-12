@@ -11,7 +11,6 @@ import {
   Code,
   CodeView,
   EmptyState,
-  Grid,
   IconButton,
   Input,
   plugin,
@@ -163,14 +162,15 @@ function Setup({ s }: { s: ShakoState }) {
 
 // ---- Overview ----
 
-function Cell({ label, value, tone }: { label: string; value: string; tone?: 'warning' | 'danger' }) {
+/** One line of the Overview: "Label: value". */
+function Line({ label, value, tone }: { label: string; value: string; tone?: 'warning' | 'danger' }) {
   return (
-    <Stack gap="none">
-      <Label>{label}</Label>
+    <Text size="sm">
+      <Text size="sm" muted>{`${label}: `}</Text>
       <Text size="sm" weight="medium" tone={tone}>
         {value}
       </Text>
-    </Stack>
+    </Text>
   )
 }
 
@@ -178,8 +178,11 @@ function Overview({ s }: { s: ShakoState }) {
   const o = s.overview
   const c = s.credit
   const low = c && c.tone !== 'success' ? c.tone : undefined
+  const rate =
+    c && c.perDay !== null && c.perHour !== null ? `${dollars(c.perDay)}/day (${dollars(c.perHour, 3)}/h)` : '?'
+  const lasts = c ? c.runway.replace(/^about /, '~').replace('more than a year', '1+ year') : '?'
   return (
-    <Box border radius="md" padding="sm" direction="column" gap="xs">
+    <Box border radius="md" padding="sm" direction="column" gap="none">
       <Row justify="between">
         <Text weight="semibold" size="sm">
           Overview
@@ -188,17 +191,10 @@ function Overview({ s }: { s: ShakoState }) {
           Top up
         </Button>
       </Row>
-      <Grid columns={3} gap="xs">
-        <Cell label="VMs" value={o ? String(o.total) : '?'} />
-        <Cell label="Awake" value={o ? String(o.awake) : '?'} />
-        <Cell label="Asleep" value={o ? String(o.asleep) : '?'} />
-        <Cell label="RAM" value={o ? `${o.ramGb} GB` : '?'} />
-        <Cell label="Disk" value={o ? `${o.diskGb} GB` : '?'} />
-        <Cell label="Credit" value={c ? dollars(c.balance) : '?'} tone={low} />
-        <Cell label="Run rate" value={c?.perDay !== null && c?.perDay !== undefined ? `${dollars(c.perDay)}/day` : '?'} />
-        <Cell label="Per hour" value={c?.perHour !== null && c?.perHour !== undefined ? dollars(c.perHour, 3) : '?'} />
-        <Cell label="Lasts" value={c ? c.runway.replace(/^about /, '~').replace('more than a year', '1+ year') : '?'} tone={low} />
-      </Grid>
+      <Line label="VMs" value={o ? `${o.total} (${o.awake} awake · ${o.asleep} asleep)` : '?'} />
+      <Line label="Resources" value={o ? `${o.ramGb} GB RAM · ${o.diskGb} GB disk` : '?'} />
+      <Line label="Credit" value={c ? `${dollars(c.balance)} · lasts ${lasts}` : '?'} tone={low} />
+      <Line label="Run rate" value={rate} />
       {low ? (
         <Text size="xs" tone={low}>
           Credit is running low. A VM stops when the credit runs out.
