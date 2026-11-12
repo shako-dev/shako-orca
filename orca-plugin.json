@@ -7,7 +7,7 @@
   "version": "0.1.0",
   "description": "Cloud VMs that sleep when idle. Sign up, register this computer's SSH key, and let your agents create VMs and host apps.",
   "author": { "name": "Shako", "url": "https://shako.dev" },
-  "repository": "https://github.com/fwanggg/shako-orca",
+  "repository": "https://github.com/shako-dev/shako-orca",
   "homepage": "https://shako.dev",
   "license": "MIT",
   "engines": { "orca": ">=1.4.248" },

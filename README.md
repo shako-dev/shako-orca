@@ -18,7 +18,7 @@ This repository holds two things:
    a terminal:
 
    ```
-   orca plugin install fwanggg/shako-orca
+   orca plugin install shako-dev/shako-orca
    ```
 
 2. **Setup.** Open the **Shako** panel in the sidebar: install the CLI, then sign up or sign in.
@@ -26,7 +26,7 @@ This repository holds two things:
 3. **The skill**, once, in any terminal. It installs for every agent and every project:
 
    ```
-   npx skills add https://github.com/fwanggg/shako-orca --skill shako --global -y
+   npx skills add https://github.com/shako-dev/shako-orca --skill shako --global -y
    ```
 
 Then ask any agent: *"Create a Shako VM and host this app."*

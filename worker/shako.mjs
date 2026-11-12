@@ -6,7 +6,7 @@ export const INSTALL_COMMAND = 'curl -fsSL https://shako.dev/install.sh | sh'
 
 /** The official install of the Shako skill for every coding agent on this computer. */
 export const SKILL_COMMAND =
-  'npx skills add https://github.com/fwanggg/shako-orca --skill shako --global -y'
+  'npx skills add https://github.com/shako-dev/shako-orca --skill shako --global -y'
 
 /** Where the skills installer puts a global skill: the shared folder, then Claude Code's own. */
 export function skillPaths(home) {
