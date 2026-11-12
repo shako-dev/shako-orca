@@ -47,8 +47,11 @@ It asks Orca for full access (`trusted-worker`), notifications and its own stora
   item or **Sign up or sign in**. The CLI opens the sign-up page in your browser.
 - `orca plugin open`, Orca's own command, to show the Shako panel: on its first start, after you
   sign in, and when you press the status bar item.
-- `shako version`, `shako whoami`, `shako vm ls` and `shako credit show`, at start, every 5 minutes
-  and when you press refresh.
+- `shako version`, `shako whoami`, `shako vm ls`, `shako vm info <vm>` (awake VMs) and
+  `shako credit show`, at start, every 5 minutes and when you press refresh.
+- `shako update`, the CLI's own updater, at start when due and then once a day, so the CLI stays
+  current with no step for you.
+- `orca host list`, and `orca host rm` for the Orca host of a VM that no longer exists.
 
 It writes no files itself and sends nothing anywhere; the `shako` CLI talks to Shako. Its storage
 holds one flag: whether the first start is done.

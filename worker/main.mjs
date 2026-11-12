@@ -27,7 +27,8 @@ import {
   shellCommand,
   skillPaths,
   statusBar,
-  statusText
+  statusText,
+  updateDue
 } from './shako.mjs'
 
 const HOME = homedir()
@@ -149,6 +150,7 @@ export default async function activate(orca) {
     vms: [],
     vmsError: null,
     orcaHostsKnown: false,
+    cliUpdate: null,
     credit: null,
     updatedAt: null
   }
@@ -231,6 +233,22 @@ export default async function activate(orca) {
     if (result.code !== 0) state.install.error = lastLine(result.stderr || result.stdout) || 'install failed'
     await refresh()
     return state
+  }
+
+  // The CLI's own updater, once a day. A new CLI brings new behaviour with no step for the person, for
+  // example the VM names in ~/.ssh/shako.conf that make Orca show the VMs as SSH hosts. The next
+  // refresh runs `shako vm ls`, which writes them.
+  const updateCli = async () => {
+    if (!state.cli.found) return
+    await orca.storage.set('cliUpdateTriedAt', Date.now())
+    const result = await run(state.cli.path, ['update'], { timeoutMs: 120_000 })
+    const message = lastLine(result.stdout || result.stderr) || (result.code === 0 ? 'done' : 'failed')
+    orca.log(`shako update: ${message}`)
+    state.cliUpdate = { at: Date.now(), ok: result.code === 0, message }
+    await refresh()
+  }
+  const updateCliWhenDue = async () => {
+    if (updateDue(await orca.storage.get('cliUpdateTriedAt'), Date.now())) await updateCli()
   }
 
   // The skills CLI's own install, in the login shell so it finds the person's npx.
@@ -325,7 +343,7 @@ export default async function activate(orca) {
   })
 
   await refresh()
-  pollTimer = setInterval(() => void refresh(), POLL_MS)
+  pollTimer = setInterval(() => void updateCliWhenDue().then(refresh), POLL_MS)
 
   // First start after install, once: show the panel, install what is missing, and start sign-in,
   // which opens the sign-up page in the browser. The skill installs while the person signs up.
@@ -333,7 +351,10 @@ export default async function activate(orca) {
   if ((await orca.storage.get('autoSetup')) !== true) {
     await orca.storage.set('autoSetup', true)
     void openPanel(orca.log)
-    if (!state.cli.found) await installCli()
+    if (!state.cli.found) {
+      await installCli()
+      await orca.storage.set('cliUpdateTriedAt', Date.now()) // just installed: it is the newest
+    }
     const skill = state.skill.installed ? Promise.resolve() : installSkill()
     if (state.cli.found && !state.account.signedIn) {
       await orca.host
@@ -348,4 +369,5 @@ export default async function activate(orca) {
     }
     await skill
   }
+  await updateCliWhenDue()
 }

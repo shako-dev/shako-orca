@@ -8,6 +8,14 @@ export const INSTALL_COMMAND = 'curl -fsSL https://shako.dev/install.sh | sh'
 export const SKILL_COMMAND =
   'npx -y skills add https://github.com/shako-dev/shako-orca --skill shako --global -y'
 
+/** How often the plugin runs `shako update`, the CLI's own updater: at start when due, then once a day. */
+export const UPDATE_EVERY_MS = 24 * 60 * 60 * 1000
+
+/** True when the last try of `shako update` is a day old, or there was none. */
+export function updateDue(lastTriedAt, now) {
+  return typeof lastTriedAt !== 'number' || now - lastTriedAt >= UPDATE_EVERY_MS
+}
+
 /** The Shako workspace: a VM's page is `${WORKSPACE_URL}/?vm=<name>`; credit is under Account. */
 export const WORKSPACE_URL = 'https://workspace.shako.dev'
 

@@ -26,7 +26,9 @@ import {
   skillPaths,
   spendPerHour,
   statusBar,
-  statusText
+  statusText,
+  UPDATE_EVERY_MS,
+  updateDue
 } from '../worker/shako.mjs'
 
 // Real output of the shako CLI, 2026-11-12.
@@ -214,4 +216,11 @@ test('Orca hosts: only exact Shako VM names; gone VMs are stale; others untouche
   })
   assert.equal(orcaHostsForVms('not json', ['web1'], 'acme.shako.dev'), null)
   assert.deepEqual(orcaHostsForVms(list, ['web1'], null), { byVm: {}, stale: [] })
+})
+
+test('shako update is due once a day, and at the first start', () => {
+  const now = 1_800_000_000_000
+  assert.equal(updateDue(null, now), true)
+  assert.equal(updateDue(now - UPDATE_EVERY_MS + 1, now), false)
+  assert.equal(updateDue(now - UPDATE_EVERY_MS, now), true)
 })

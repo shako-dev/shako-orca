@@ -45,6 +45,8 @@ export type ShakoState = {
   vmsError: string | null
   /** false: Orca's CLI did not answer, so orcaHost says nothing. */
   orcaHostsKnown: boolean
+  /** The last `shako update` this run of the worker did. */
+  cliUpdate: { at: number; ok: boolean; message: string } | null
   credit: Credit | null
   updatedAt: number | null
 }

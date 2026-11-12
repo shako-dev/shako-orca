@@ -257,6 +257,12 @@ export default function Panel() {
           {s.updatedAt ? (
             <Text muted size="xs">
               Updated <RelativeTime at={s.updatedAt} />
+              {s.cli.version ? ` · shako ${s.cli.version}` : ''}
+            </Text>
+          ) : null}
+          {s.cliUpdate && !s.cliUpdate.ok ? (
+            <Text tone="warning" size="xs">
+              {`CLI update failed: ${s.cliUpdate.message}`}
             </Text>
           ) : null}
         </Stack>
