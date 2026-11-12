@@ -163,15 +163,15 @@ function Setup({ s }: { s: ShakoState }) {
 
 // ---- Overview ----
 
-/** One line of the Overview: "Label: value". */
+/** One line of the Overview: the label on the left, its value on the right. */
 function Line({ label, value, tone }: { label: string; value: string; tone?: 'warning' | 'danger' }) {
   return (
-    <Text size="sm">
-      <Text size="sm" muted>{`${label}: `}</Text>
+    <Row justify="between" gap="sm">
+      <Text size="sm" muted>{`${label}:`}</Text>
       <Text size="sm" weight="medium" tone={tone}>
         {value}
       </Text>
-    </Text>
+    </Row>
   )
 }
 
