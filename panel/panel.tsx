@@ -69,7 +69,8 @@ const open = (url: string) => void shell.openExternal(url)
 
 function dollars(value: number | null | undefined, digits = 2): string {
   if (value === null || value === undefined) return '?'
-  if (value > 0 && value < 0.01) return '<$0.01'
+  const smallest = 10 ** -digits
+  if (value > 0 && value < smallest) return `<$${smallest.toFixed(digits)}`
   return `${value < 0 ? '-' : ''}$${Math.abs(value).toFixed(digits)}`
 }
 
@@ -178,8 +179,13 @@ function Overview({ s }: { s: ShakoState }) {
   const o = s.overview
   const c = s.credit
   const low = c && c.tone !== 'success' ? c.tone : undefined
+  // No VM costs nothing: then the rate is $0.00/day, and an hourly rate says nothing more.
   const rate =
-    c && c.perDay !== null && c.perHour !== null ? `${dollars(c.perDay)}/day (${dollars(c.perHour, 3)}/h)` : '?'
+    c && c.perDay !== null && c.perHour !== null
+      ? c.perDay > 0
+        ? `${dollars(c.perDay)}/day (${dollars(c.perHour, 3)}/h)`
+        : '$0.00/day'
+      : '?'
   return (
     <Box border radius="md" padding="sm" direction="column" gap="none">
       <Row justify="between">
@@ -196,7 +202,9 @@ function Overview({ s }: { s: ShakoState }) {
       <Line label="Run rate" value={rate} />
       {low ? (
         <Text size="xs" tone={low}>
-          Credit is running low. A VM stops when the credit runs out.
+          {c && c.balance <= 0
+            ? 'No credit left. Top up to run VMs.'
+            : 'Credit is running low. A VM stops when the credit runs out.'}
         </Text>
       ) : null}
     </Box>
