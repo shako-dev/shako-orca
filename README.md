@@ -26,7 +26,7 @@ This repository holds two things:
 3. **The skill**, once, in any terminal. It installs for every agent and every project:
 
    ```
-   npx skills add https://github.com/fwanggg/shako-orca --skill shako --global
+   npx skills add https://github.com/fwanggg/shako-orca --skill shako --global -y
    ```
 
 Then ask any agent: *"Create a Shako VM and host this app."*
