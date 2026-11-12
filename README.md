@@ -47,7 +47,8 @@ workspace.
 The VM is a copy of your VM `orca-base` when you have one, so its agents stay logged in: make one, log in your
 agents there, and every workspace starts ready. Without it, each workspace gets a new small VM with Claude Code and
 Codex. Your laptop pushes the project's code to the VM over SSH, so the VM needs no Git credentials. The VM sleeps
-when idle. The recipe runs `shako vm orca create|suspend|resume|destroy`.
+when idle. The recipe (`recipes/shako-vm.json`) is a short shell script per phase over the `shako` CLI
+(`vm create`, `vm cp`, `vm info`, `vm wake`, `vm sleep`, `vm rm`), `ssh` and `git push`.
 
 ## What the plugin does on your computer
 
