@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "shako-vm",
+  "name": "Shako VM",
+  "description": "A new Shako VM for this workspace, deleted with it. A copy of your VM orca-base when you have one (its agents stay logged in), else a small VM with Claude Code and Codex. It sleeps when idle.",
+  "create": "export PATH=\"$HOME/.local/bin:$PATH\"; shako vm orca --help >/dev/null 2>&1 || shako update >&2; exec shako vm orca create",
+  "suspend": "export PATH=\"$HOME/.local/bin:$PATH\"; shako vm orca --help >/dev/null 2>&1 || shako update >&2; exec shako vm orca suspend",
+  "resume": "export PATH=\"$HOME/.local/bin:$PATH\"; shako vm orca --help >/dev/null 2>&1 || shako update >&2; exec shako vm orca resume",
+  "destroy": "export PATH=\"$HOME/.local/bin:$PATH\"; shako vm orca --help >/dev/null 2>&1 || shako update >&2; exec shako vm orca destroy"
+}

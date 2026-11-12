@@ -36,6 +36,19 @@ To install only the skill, without the plugin:
 npx -y skills add https://github.com/shako-dev/shako-orca --skill shako --global -y
 ```
 
+## One VM per workspace (Orca's Cloud VM)
+
+The plugin also adds Orca's VM recipe **Shako VM**: a workspace on it gets its own new VM, which is deleted with the
+workspace.
+
+1. In Orca: Settings → Experimental → **Cloud VM**, on.
+2. Create a workspace and choose **Shako VM** under **Run on**.
+
+The VM is a copy of your VM `orca-base` when you have one, so its agents stay logged in: make one, log in your
+agents there, and every workspace starts ready. Without it, each workspace gets a new small VM with Claude Code and
+Codex. Your laptop pushes the project's code to the VM over SSH, so the VM needs no Git credentials. The VM sleeps
+when idle. The recipe runs `shako vm orca create|suspend|resume|destroy`.
+
 ## What the plugin does on your computer
 
 It asks Orca for full access (`trusted-worker`), notifications and its own storage. With it, it runs:

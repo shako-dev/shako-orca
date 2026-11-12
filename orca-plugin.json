@@ -4,7 +4,7 @@
   "execution": "trusted-worker",
   "id": "shako",
   "name": "Shako",
-  "version": "0.6.14",
+  "version": "0.7.0",
   "description": "Real cloud VMs that are interconnected, SSH-able, created in seconds, auto-sleep to save, and wake up in milliseconds. Typical use cases: remote coding (a Conductor alternative), small software hosting, agent hosting. New users get $5 credit (~1 month of a 4 GB RAM / 32 GB disk VM). The plugin installs a panel UI and skills to operate your fleet. VMs are added to Orca's SSH Hosts automatically, ready to connect.",
   "author": { "name": "Shako", "url": "https://shako.dev" },
   "repository": "https://github.com/shako-dev/shako-orca",
@@ -32,6 +32,7 @@
       { "id": "setup", "title": "Shako", "icon": "cloud", "entry": "panel/panel.tsx", "ui": "components" }
     ],
     "commands": [{ "id": "shako.status", "title": "Shako: Status" }],
+    "vmRecipes": [{ "path": "recipes/shako-vm.json" }],
     "statusBarItems": [
       { "id": "shako", "text": "Shako", "icon": "cloud", "tooltip": "Shako", "command": "shako.status" }
     ]
