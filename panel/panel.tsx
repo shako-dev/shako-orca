@@ -123,7 +123,10 @@ function Setup({ s }: { s: ShakoState }) {
       <Step title="2. Account" done={s.account.signedIn}>
         {s.login.running ? (
           <Stack gap="xs">
-            <Spinner label="Waiting for your approval in the browser" />
+            <Spinner label="Finish in your browser" />
+            <Text muted size="sm">1. Enter your email, then open the link we send you.</Text>
+            <Text muted size="sm">2. Choose your name. It goes in your VM addresses.</Text>
+            <Text muted size="sm">3. Approve this computer.</Text>
             <Row gap="xs">
               {s.login.link ? (
                 <Button size="sm" icon="open-external" variant="outline" onPress={() => open(s.login.link!)}>

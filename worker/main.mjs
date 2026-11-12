@@ -302,7 +302,11 @@ export default async function activate(orca) {
     state.login.running = false
     state.login.link = null
     if (result.code !== 0 || !parseLoggedIn(result.stdout)) {
-      state.login.error = lastLine(result.stderr || result.stdout) || 'sign-in did not finish'
+      const why = lastLine(result.stderr || result.stdout)
+      // The CLI's words ("run shako login again") are for a terminal: say what to press here.
+      state.login.error = /no approval came|not approved|cancelled/i.test(why) || result.code === -1
+        ? 'Sign-up was not finished. Press Sign up or sign in to continue where you left off.'
+        : why || 'Sign-up was not finished.'
     }
     await refresh()
     if (state.account.signedIn) {
