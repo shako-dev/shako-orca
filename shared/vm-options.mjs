@@ -17,7 +17,7 @@ export const AGENTS = [
   { id: 'codex', title: 'Codex', size: 'small' },
   { id: 'opencode', title: 'OpenCode', size: 'small' },
   { id: 'pi', title: 'Pi', size: 'small' },
-  { id: 'openclaw', title: 'OpenClaw', size: 'small' },
+  { id: 'openclaw', title: 'OpenClaw', size: 'mid' },
   { id: 'hermes', title: 'Hermes', size: 'mid' }
 ]
 

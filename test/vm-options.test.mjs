@@ -17,6 +17,7 @@ test('recommended size, as the web New VM form', () => {
   assert.equal(recommendedSize([], false), null)
   assert.equal(recommendedSize(['claude'], false), 'small')
   assert.equal(recommendedSize(['claude', 'hermes'], false), 'mid')
+  assert.equal(recommendedSize(['openclaw'], false), 'mid')
   assert.equal(recommendedSize(['claude'], true), 'mid')
 })
 
