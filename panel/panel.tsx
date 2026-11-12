@@ -9,6 +9,7 @@ import {
   Button,
   Checkbox,
   Code,
+  Collapsible,
   CodeView,
   EmptyState,
   IconButton,
@@ -44,8 +45,10 @@ const state = atom<ShakoState | null>(null)
 const failure = atom<string | null>(null)
 /** VM cards the person folded; kept across panel runs. */
 const folded = atom<string[]>('foldedVms', [], { persist: 'plugin' })
-const formOpen = atom(false)
-const draft = atom<NewVm>({ name: '', size: DEFAULT_SIZE, agents: [], desktop: false })
+const formOpen = atom(true)
+/** The agents list of the create form: a fold, like a dropdown. */
+const agentsOpen = atom(true)
+const draft = atom<NewVm>({ name: 'demo1', size: 'mid', agents: ['claude', 'hermes'], desktop: false })
 const copiedName = atom<string | null>(null)
 
 async function ask(name: ShakoRequest, input: object = {}) {
@@ -217,6 +220,8 @@ function CreateForm({ s }: { s: ShakoState }) {
   const d = read(draft)
   const error = d.name ? createError(d) : null
   const recommended = recommendedSize(d.agents, d.desktop)
+  const chosen = AGENTS.filter((a) => d.agents.includes(a.id)).map((a) => a.title)
+  const agentsTitle = `Agents: ${chosen.length ? chosen.join(', ') : 'none'}`
   const create = async () => {
     const next = await ask('shako.createVm', d)
     if (next && !next.createError) {
@@ -240,12 +245,13 @@ function CreateForm({ s }: { s: ShakoState }) {
         onChange={(name) => update(draft, (prev) => ({ ...prev, name: name.trim().toLowerCase() }))}
         onSubmit={() => (error ? undefined : void create())}
       />
-      <Label>Agents</Label>
-      <Row gap="sm" wrap>
-        {AGENTS.map((agent) => (
-          <Checkbox label={agent.title} checked={d.agents.includes(agent.id)} onChange={(on) => toggleAgent(agent.id, on)} />
-        ))}
-      </Row>
+      <Collapsible title={agentsTitle} open={read(agentsOpen)} onChange={(isOpen) => set(agentsOpen, isOpen)}>
+        <Stack gap="none">
+          {AGENTS.map((agent) => (
+            <Checkbox label={agent.title} checked={d.agents.includes(agent.id)} onChange={(on) => toggleAgent(agent.id, on)} />
+          ))}
+        </Stack>
+      </Collapsible>
       <Switch
         label="Browser use and computer use"
         checked={d.desktop}
