@@ -45,10 +45,10 @@ const state = atom<ShakoState | null>(null)
 const failure = atom<string | null>(null)
 /** VM cards the person folded; kept across panel runs. */
 const folded = atom<string[]>('foldedVms', [], { persist: 'plugin' })
-const formOpen = atom(true)
+const formOpen = atom(false)
 /** The agents list of the create form: a fold, like a dropdown. */
-const agentsOpen = atom(true)
-const draft = atom<NewVm>({ name: 'demo1', size: 'mid', agents: ['claude', 'hermes'], desktop: false })
+const agentsOpen = atom(false)
+const draft = atom<NewVm>({ name: '', size: DEFAULT_SIZE, agents: [], desktop: false })
 const copiedName = atom<string | null>(null)
 
 async function ask(name: ShakoRequest, input: object = {}) {
