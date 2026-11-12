@@ -12,8 +12,8 @@ import {
   EmptyState,
   Heading,
   IconButton,
-  Link,
   plugin,
+  Progress,
   read,
   RelativeTime,
   Row,
@@ -24,7 +24,7 @@ import {
   Text,
   type PanelContext
 } from 'orca'
-import type { ShakoRequest, ShakoState, Vm } from './protocol'
+import type { ShakoRequest, ShakoState, Usage, Vm } from './protocol'
 
 const state = atom<ShakoState | null>(null)
 const failure = atom<string | null>(null)
@@ -130,40 +130,50 @@ function Setup({ s }: { s: ShakoState }) {
   )
 }
 
+/** One compact row: the balance, what it costs a day and how long it lasts, and Top up. */
 function CreditCard({ s }: { s: ShakoState }) {
   const c = s.credit
-  if (!c) {
-    return (
-      <Card title="Credit">
-        <Text muted>Could not read the credit. Press refresh to try again.</Text>
-      </Card>
-    )
-  }
+  const low = c !== null && c.tone !== 'success'
+  const topUp = (
+    <Button icon="open-external" size="sm" variant={low ? 'solid' : 'outline'} onPress={() => open(s.workspaceUrl)}>
+      Top up
+    </Button>
+  )
   return (
-    <Card title="Credit">
-      <Stack gap="xs">
-        <Row justify="between">
-          <Text weight="semibold">{dollars(c.balance)} left</Text>
-          <Badge tone={c.tone}>{c.runway}</Badge>
-        </Row>
-        <Text muted size="sm">
-          {c.perDay === null
-            ? `${dollars(c.used)} used so far.`
-            : `Spending ${dollars(c.perDay)} a day at the current VM states. ${dollars(c.used)} used so far.`}
+    <Box border radius="md" padding="sm" direction="column" gap="xs">
+      <Row justify="between">
+        <Stack gap="none">
+          <Text weight="semibold">{c ? `Credit ${dollars(c.balance)}` : 'Credit'}</Text>
+          <Text size="sm" muted={!low} tone={low ? c!.tone : undefined}>
+            {!c
+              ? 'Could not read it. Press refresh.'
+              : c.days === null || c.perDay === null
+                ? c.runway
+                : `${dollars(c.perDay)} a day · lasts ${c.runway}`}
+          </Text>
+        </Stack>
+        {topUp}
+      </Row>
+      {low ? (
+        <Text size="sm" tone={c!.tone}>
+          Running low. A VM stops when the credit runs out.
         </Text>
-        {c.tone === 'success' ? null : (
-          <Callout tone={c.tone} title="Credit is running low">
-            Add credit in the workspace, under Account. A VM stops when the credit runs out.
-          </Callout>
-        )}
-        <Link onPress={() => open(s.workspaceUrl)}>Add credit in the workspace</Link>
-      </Stack>
-    </Card>
+      ) : null}
+    </Box>
   )
 }
 
+function usageLabel(name: string, u: Usage): string {
+  return `${name} ${u.usedGb} of ${u.totalGb} GB (${u.percent}%)`
+}
+
+function orcaHostText(vm: Vm): string {
+  if (!vm.orcaHost) return 'Orca: not an SSH host yet'
+  return vm.orcaHost.connected ? 'Orca: connected' : 'Orca: SSH host, choose it under Run on'
+}
+
+/** A VM: its state, its SSH name, what it uses, and whether Orca has it as an SSH host. */
 function VmRow({ vm, s }: { vm: Vm; s: ShakoState }) {
-  const agents = vm.agents && vm.agents !== '-' ? ` · agents: ${vm.agents}` : ''
   return (
     <Box border radius="md" padding="sm" direction="column" gap="xs">
       <Row justify="between">
@@ -172,15 +182,24 @@ function VmRow({ vm, s }: { vm: Vm; s: ShakoState }) {
         </Text>
         <Badge tone={stateTone(vm.state)}>{vm.state}</Badge>
       </Row>
-      <Text muted size="sm">
-        {`${vm.size} · ${vm.disk} disk · sleep ${vm.sleep}`}
-      </Text>
-      <Text muted size="sm">
-        {`active ${vm.active}${agents}`}
-      </Text>
-      {s.account.sshDomain ? (
+      {vm.ssh ? (
         <Text size="sm" truncate>
-          <Code>{`ssh ${vm.name}.${s.account.sshDomain}`}</Code>
+          <Code>{`ssh ${vm.ssh}`}</Code>
+        </Text>
+      ) : null}
+      <Text muted size="sm">
+        {`${vm.size} · ${vm.disk} disk · active ${vm.active}`}
+      </Text>
+      {vm.ramUse ? <Progress label={usageLabel('RAM', vm.ramUse)} value={vm.ramUse.percent} /> : null}
+      {vm.diskUse ? <Progress label={usageLabel('Disk', vm.diskUse)} value={vm.diskUse.percent} /> : null}
+      {!vm.ramUse && vm.state === 'asleep' ? (
+        <Text muted size="sm">
+          Asleep: no live use. SSH or a request wakes it.
+        </Text>
+      ) : null}
+      {s.orcaHostsKnown ? (
+        <Text muted size="sm">
+          {orcaHostText(vm)}
         </Text>
       ) : null}
     </Box>

@@ -155,6 +155,45 @@ export function parseVmList(text) {
     .filter((vm) => vm.name)
 }
 
+/**
+ * `shako vm info <vm>` of an awake VM: "ram  3.0 GB of 7.8 GB used (38%)" and the same for disk.
+ * An asleep VM has no such lines (the box does not wake it to ask), so both are null.
+ */
+export function parseVmUsage(text) {
+  const usage = (label) => {
+    const m = new RegExp(`^\\s*${label}\\s+([\\d.]+) GB of ([\\d.]+) GB used \\((\\d+)%\\)`, 'm').exec(String(text))
+    return m ? { usedGb: Number(m[1]), totalGb: Number(m[2]), percent: Number(m[3]) } : null
+  }
+  return { ram: usage('ram'), disk: usage('disk') }
+}
+
+/**
+ * Which VMs Orca has as SSH hosts, from `orca host list --json`, and which Orca hosts are Shako VMs
+ * that no longer exist. A host is a Shako VM when its name is exactly `<vm>.<sshDomain>`; any other
+ * host (the person's own, or one they typed with a user@) is never touched.
+ */
+export function orcaHostsForVms(hostListText, vmNames, sshDomain) {
+  let hosts = []
+  try {
+    hosts = JSON.parse(String(hostListText))?.result?.hosts ?? []
+  } catch {
+    return null
+  }
+  if (!sshDomain) return { byVm: {}, stale: [] }
+  const suffix = `.${sshDomain}`
+  const names = new Set(vmNames)
+  const byVm = {}
+  const stale = []
+  for (const host of hosts) {
+    if (host.kind !== 'ssh' || typeof host.name !== 'string' || !host.name.endsWith(suffix)) continue
+    const vm = host.name.slice(0, -suffix.length)
+    if (!/^[a-z][a-z0-9-]{0,30}$/.test(vm)) continue
+    if (names.has(vm)) byVm[vm] = { id: host.id, connected: host.connected === true }
+    else stale.push(host.id)
+  }
+  return { byVm, stale }
+}
+
 /** GB of memory from a size such as "4cpu/8G" or "1cpu/1536M". */
 export function memoryGb(size) {
   const match = /\/(\d+(?:\.\d+)?)([GM])\b/.exec(String(size))

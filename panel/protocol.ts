@@ -10,7 +10,16 @@ export type Vm = {
   sleep: string
   active: string
   agents: string
+  /** `<vm>.<tenant>.<domain>`, the name ssh and Orca use. */
+  ssh: string | null
+  /** RAM and disk use; null for an asleep VM, which does not report them. */
+  ramUse: Usage | null
+  diskUse: Usage | null
+  /** The VM's SSH host in Orca, or null when Orca does not have it (yet). */
+  orcaHost: { id: string; connected: boolean } | null
 }
+
+export type Usage = { usedGb: number; totalGb: number; percent: number }
 
 export type Credit = {
   balance: number
@@ -34,6 +43,8 @@ export type ShakoState = {
   skill: { installed: boolean; running: boolean; error: string | null; command: string }
   vms: Vm[]
   vmsError: string | null
+  /** false: Orca's CLI did not answer, so orcaHost says nothing. */
+  orcaHostsKnown: boolean
   credit: Credit | null
   updatedAt: number | null
 }

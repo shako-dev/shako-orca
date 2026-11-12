@@ -12,11 +12,13 @@ import {
   lastLine,
   memoryGb,
   orcaCliCandidates,
+  orcaHostsForVms,
   parseCredit,
   parseLoggedIn,
   parseLoginLink,
   parseVersion,
   parseVmList,
+  parseVmUsage,
   parseWhoami,
   pickPluginKey,
   runwayDays,
@@ -181,4 +183,35 @@ test('finds Orca\'s CLI next to the app, and this plugin\'s key', () => {
   assert.equal(pickPluginKey(list([{ pluginKey: 'local.shako', status: 'running' }])), 'local.shako')
   assert.equal(pickPluginKey(list([{ pluginKey: 'shako-dev.shako', status: 'disabled' }])), null)
   assert.equal(pickPluginKey('not json'), null)
+})
+
+test('VM use from vm info: awake has RAM and disk, asleep has none', () => {
+  const awake = `auction: awake
+  size      1cpu/2G, disk 20 GB
+  ram       0.2 GB of 1.9 GB used (11%)
+  disk      0.3 GB of 19.6 GB used (1%)
+`
+  assert.deepEqual(parseVmUsage(awake), {
+    ram: { usedGb: 0.2, totalGb: 1.9, percent: 11 },
+    disk: { usedGb: 0.3, totalGb: 19.6, percent: 1 }
+  })
+  assert.deepEqual(parseVmUsage('here-lies: asleep\n  size      4cpu/12G, disk 96 GB\n'), { ram: null, disk: null })
+})
+
+test('Orca hosts: only exact Shako VM names; gone VMs are stale; others untouched', () => {
+  const list = JSON.stringify({ ok: true, result: { hosts: [
+    { kind: 'local', name: 'this machine', id: 'local' },
+    { kind: 'ssh', name: 'web1.acme.shako.dev', id: 'ssh-1', connected: true },
+    { kind: 'ssh', name: 'old.acme.shako.dev', id: 'ssh-2', connected: false },
+    { kind: 'ssh', name: 'shako@web1.acme.shako.dev', id: 'ssh-3' },
+    { kind: 'ssh', name: 'devbox', id: 'ssh-4' },
+    { kind: 'ssh', name: 'web1.other.shako.dev', id: 'ssh-5' },
+    { kind: 'ssh', name: 'github.com', id: 'ssh-6' }
+  ] } })
+  assert.deepEqual(orcaHostsForVms(list, ['web1', 'db'], 'acme.shako.dev'), {
+    byVm: { web1: { id: 'ssh-1', connected: true } },
+    stale: ['ssh-2']
+  })
+  assert.equal(orcaHostsForVms('not json', ['web1'], 'acme.shako.dev'), null)
+  assert.deepEqual(orcaHostsForVms(list, ['web1'], null), { byVm: {}, stale: [] })
 })

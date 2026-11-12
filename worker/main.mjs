@@ -15,6 +15,8 @@ import {
   keyName,
   lastLine,
   orcaCliCandidates,
+  orcaHostsForVms,
+  parseVmUsage,
   parseCredit,
   parseLoggedIn,
   parseLoginLink,
@@ -115,6 +117,25 @@ async function openPanel(log) {
   if (opened.code !== 0) log(`open panel: ${lastLine(opened.stderr || opened.stdout)}`)
 }
 
+/**
+ * Matches the VMs with Orca's SSH hosts. Orca adds a VM as a host by itself from ~/.ssh/shako.conf,
+ * where the shako CLI names each VM. When a VM is gone, this removes its host with Orca's own
+ * `orca host rm`. Call it only with a VM list that `shako vm ls` gave: an error must not look like
+ * "no VMs". Returns { vmName: { id, connected } }, or null when Orca's CLI cannot answer.
+ */
+async function syncOrcaHosts(vms, sshDomain, log) {
+  const cli = await findOrcaCli()
+  if (!cli || !sshDomain) return null
+  const list = await run(cli, ['host', 'list', '--json'], { timeoutMs: 30_000 })
+  const hosts = list.code === 0 ? orcaHostsForVms(list.stdout, vms.map((vm) => vm.name), sshDomain) : null
+  if (!hosts) return null
+  for (const id of hosts.stale) {
+    const removed = await run(cli, ['host', 'rm', '--host', `ssh:${id}`, '--json'], { timeoutMs: 30_000 })
+    log(removed.code === 0 ? `removed the Orca host of a deleted VM: ${id}` : `orca host rm ${id}: ${lastLine(removed.stdout)}`)
+  }
+  return hosts.byVm
+}
+
 /** @type {import('orca/worker').Activate} */
 export default async function activate(orca) {
   const state = {
@@ -127,6 +148,7 @@ export default async function activate(orca) {
     skill: { installed: false, running: false, error: null, command: SKILL_COMMAND },
     vms: [],
     vmsError: null,
+    orcaHostsKnown: false,
     credit: null,
     updatedAt: null
   }
@@ -154,8 +176,30 @@ export default async function activate(orca) {
       run(state.cli.path, ['vm', 'ls'], { timeoutMs: 30_000 }),
       run(state.cli.path, ['credit', 'show'], { timeoutMs: 30_000 })
     ])
-    if (vms.code === 0) state.vms = parseVmList(vms.stdout)
-    else state.vmsError = lastLine(vms.stderr || vms.stdout) || 'could not list the VMs'
+    if (vms.code !== 0) {
+      state.vmsError = lastLine(vms.stderr || vms.stdout) || 'could not list the VMs'
+    } else {
+      const list = parseVmList(vms.stdout)
+      // RAM and disk use: only an awake VM reports them, and asking an asleep one would not wake it.
+      const usages = await Promise.all(
+        list.map((vm) =>
+          vm.state === 'awake'
+            ? run(state.cli.path, ['vm', 'info', vm.name], { timeoutMs: 30_000 }).then((r) =>
+                r.code === 0 ? parseVmUsage(r.stdout) : { ram: null, disk: null }
+              )
+            : Promise.resolve({ ram: null, disk: null })
+        )
+      )
+      const hosts = await syncOrcaHosts(list, me.sshDomain, orca.log)
+      state.vms = list.map((vm, i) => ({
+        ...vm,
+        ssh: me.sshDomain ? `${vm.name}.${me.sshDomain}` : null,
+        ramUse: usages[i].ram,
+        diskUse: usages[i].disk,
+        orcaHost: hosts ? (hosts[vm.name] ?? null) : null
+      }))
+      state.orcaHostsKnown = hosts !== null
+    }
     state.credit = credit.code === 0 ? creditSummary(parseCredit(credit.stdout), state.vms, me.rates) : null
   }
 
