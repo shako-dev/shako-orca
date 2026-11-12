@@ -19,7 +19,7 @@ This repository holds two things:
 1. In a terminal inside Orca:
 
    ```
-   orca plugin install shako-dev/shako-orca
+   orca plugin install shako-dev/shako-orca@main
    ```
 
    Orca prints what the plugin may do and a fingerprint. Run the same command again with
