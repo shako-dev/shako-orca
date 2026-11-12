@@ -180,7 +180,6 @@ function Overview({ s }: { s: ShakoState }) {
   const low = c && c.tone !== 'success' ? c.tone : undefined
   const rate =
     c && c.perDay !== null && c.perHour !== null ? `${dollars(c.perDay)}/day (${dollars(c.perHour, 3)}/h)` : '?'
-  const lasts = c ? c.runway.replace(/^about /, '~').replace('more than a year', '1+ year') : '?'
   return (
     <Box border radius="md" padding="sm" direction="column" gap="none">
       <Row justify="between">
@@ -193,7 +192,7 @@ function Overview({ s }: { s: ShakoState }) {
       </Row>
       <Line label="VMs" value={o ? `${o.total} (${o.awake} awake · ${o.asleep} asleep)` : '?'} />
       <Line label="Resources" value={o ? `${o.ramGb} GB RAM · ${o.diskGb} GB disk` : '?'} />
-      <Line label="Credit" value={c ? `${dollars(c.balance)} · lasts ${lasts}` : '?'} tone={low} />
+      <Line label="Credit" value={c ? dollars(c.balance) : '?'} tone={low} />
       <Line label="Run rate" value={rate} />
       {low ? (
         <Text size="xs" tone={low}>
