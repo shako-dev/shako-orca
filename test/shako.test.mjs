@@ -11,12 +11,14 @@ import {
   keyName,
   lastLine,
   memoryGb,
+  orcaCliCandidates,
   parseCredit,
   parseLoggedIn,
   parseLoginLink,
   parseVersion,
   parseVmList,
   parseWhoami,
+  pickPluginKey,
   runwayDays,
   shellCommand,
   skillPaths,
@@ -135,6 +137,7 @@ function state(overrides) {
     cli: { found: true, path: '/x', version: '1' },
     account: { signedIn: true, tenant: 'acme', email: 'me@example.com' },
     skill: { installed: true, command: SKILL_COMMAND },
+    login: { running: false },
     vms: [],
     credit: { balance: 12.5, runway: 'about 5 days', tone: 'warning' },
     ...overrides
@@ -150,10 +153,32 @@ test('status bar and status text follow setup and credit', () => {
   })
   assert.equal(statusBar(state({ credit: null })).text, 'Shako: acme')
   const out = state({ account: { signedIn: false, tenant: null, email: null } })
-  assert.equal(statusBar(out).text, 'Shako: set up')
+  assert.equal(statusBar(out).text, 'Shako: sign up')
+  assert.equal(statusBar({ ...out, login: { running: true } }).text, 'Shako: approve in browser')
+  assert.match(statusText({ ...out, login: { running: true } }), /in your browser/)
   assert.match(statusText(out), /not signed in/)
   assert.match(statusText(state({ cli: { found: false } })), /not installed/)
   assert.match(statusText(state({ skill: { installed: false } })), /npx -y skills add/)
   assert.match(statusText(state()), /0 VMs\. \$12\.50 left/)
   assert.match(statusText(state({ supported: false })), /WSL/)
+})
+
+test('finds Orca\'s CLI next to the app, and this plugin\'s key', () => {
+  const linux = orcaCliCandidates('/opt/Orca/orca-ide', { PATH: '/usr/bin' }, '/home/u')
+  assert.equal(linux[0], '/opt/Orca/resources/bin/orca-ide')
+  const mac = orcaCliCandidates('/Applications/Orca.app/Contents/MacOS/Orca', { PATH: '' }, '/Users/u')
+  assert.ok(mac.includes('/Applications/Orca.app/Contents/Resources/bin/orca'))
+  assert.ok(linux.includes('/home/u/.local/bin/orca'))
+  const list = (plugins) => JSON.stringify({ ok: true, result: { plugins } })
+  assert.equal(
+    pickPluginKey(list([
+      { pluginKey: 'local.shako', status: 'running' },
+      { pluginKey: 'shako-dev.shako', status: 'running' },
+      { pluginKey: 'acme.other', status: 'running' }
+    ])),
+    'shako-dev.shako'
+  )
+  assert.equal(pickPluginKey(list([{ pluginKey: 'local.shako', status: 'running' }])), 'local.shako')
+  assert.equal(pickPluginKey(list([{ pluginKey: 'shako-dev.shako', status: 'disabled' }])), null)
+  assert.equal(pickPluginKey('not json'), null)
 })

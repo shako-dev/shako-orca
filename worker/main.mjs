@@ -14,12 +14,14 @@ import {
   creditSummary,
   keyName,
   lastLine,
+  orcaCliCandidates,
   parseCredit,
   parseLoggedIn,
   parseLoginLink,
   parseVersion,
   parseVmList,
   parseWhoami,
+  pickPluginKey,
   shellCommand,
   skillPaths,
   statusBar,
@@ -93,6 +95,24 @@ async function findCli() {
     if (result.code === 0 && version) return { found: true, path, version }
   }
   return { found: false, path: null, version: null }
+}
+
+async function findOrcaCli() {
+  for (const path of orcaCliCandidates(process.execPath, process.env, HOME)) {
+    if (await exists(path)) return path
+  }
+  return null
+}
+
+/** Shows the Shako panel with Orca's own `orca plugin open`. Best effort: it never throws. */
+async function openPanel(log) {
+  const cli = await findOrcaCli()
+  if (!cli) return log('open panel: no Orca CLI found')
+  const list = await run(cli, ['plugin', 'list', '--json'], { timeoutMs: 30_000 })
+  const key = pickPluginKey(list.stdout)
+  if (!key) return log('open panel: this plugin is not in orca plugin list')
+  const opened = await run(cli, ['plugin', 'open', key, '--panel', 'setup', '--json'], { timeoutMs: 30_000 })
+  if (opened.code !== 0) log(`open panel: ${lastLine(opened.stderr || opened.stdout)}`)
 }
 
 /** @type {import('orca/worker').Activate} */
@@ -215,10 +235,11 @@ export default async function activate(orca) {
     }
     await refresh()
     if (state.account.signedIn) {
+      void openPanel(orca.log) // the panel now shows the credit and the VMs
       await orca.host
         .call('notifications.show', {
           title: `Shako: signed in as ${state.account.tenant}`,
-          body: 'Ask any agent to create a VM or host an app.'
+          body: 'Your VMs are in the Shako panel. Ask any agent to create a VM or host an app.'
         })
         .catch(() => undefined)
     }
@@ -248,7 +269,13 @@ export default async function activate(orca) {
   })
   orca.panels.handle('shako.cancelLogin', cancelLogin)
 
+  // The status bar item runs this. It shows the panel, and when nobody is signed in it starts sign-in.
   orca.commands.register('shako.status', async () => {
+    void openPanel(orca.log)
+    if (state.cli.found && !state.account.signedIn && !state.login.running) {
+      void login()
+      return 'Shako: a page opened in your browser. Sign up or sign in there, and approve this computer.'
+    }
     await refresh()
     return statusText(state)
   })
@@ -256,18 +283,25 @@ export default async function activate(orca) {
   await refresh()
   pollTimer = setInterval(() => void refresh(), POLL_MS)
 
-  // First start after install: install what is missing, once. The panel's buttons retry a failure.
+  // First start after install, once: show the panel, install what is missing, and start sign-in,
+  // which opens the sign-up page in the browser. The skill installs while the person signs up.
+  // Later starts never open the browser by themselves; the status bar item starts sign-in.
   if ((await orca.storage.get('autoSetup')) !== true) {
     await orca.storage.set('autoSetup', true)
+    void openPanel(orca.log)
     if (!state.cli.found) await installCli()
-    if (!state.skill.installed) await installSkill()
-    await orca.host
-      .call('notifications.show', state.account.signedIn
-        ? { title: 'Shako is ready', body: 'Ask any agent to create a VM or host an app.' }
-        : {
-            title: 'Shako: one step left',
-            body: 'Open the Shako panel in the right sidebar and press "Sign up or sign in".'
-          })
-      .catch(() => undefined)
+    const skill = state.skill.installed ? Promise.resolve() : installSkill()
+    if (state.cli.found && !state.account.signedIn) {
+      await orca.host
+        .call('notifications.show', {
+          title: 'Shako: sign up in your browser',
+          body: 'A page opened in your browser. Sign up or sign in there, and approve this computer.'
+        })
+        .catch(() => undefined)
+      await login()
+    } else if (state.account.signedIn) {
+      void openPanel(orca.log)
+    }
+    await skill
   }
 }

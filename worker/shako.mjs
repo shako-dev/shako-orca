@@ -1,5 +1,5 @@
 // Pure parts of the plugin: no Orca API, so node --test covers them (test/shako.test.mjs).
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 
 /** The official installer of the shako CLI. It installs into ~/.local/bin and needs python3 3.10+. */
 export const INSTALL_COMMAND = 'curl -fsSL https://shako.dev/install.sh | sh'
@@ -31,6 +31,38 @@ export function cliCandidates(env, home) {
     out.push(join(dir, 'shako'))
   }
   return out
+}
+
+/**
+ * Orca's own CLI, for `orca plugin open` (show this plugin's panel). The worker runs in Orca's app
+ * binary, so the CLI that ships with the app is found next to it first: resources/bin/orca-ide on
+ * Linux (checked), Contents/Resources/bin/orca on macOS. Then a registered `orca` on PATH.
+ */
+export function orcaCliCandidates(execPath, env, home) {
+  const dir = dirname(String(execPath))
+  const out = [
+    join(dir, 'resources', 'bin', 'orca-ide'),
+    join(dir, 'resources', 'bin', 'orca'),
+    join(dir, '..', 'Resources', 'bin', 'orca'),
+    join(dir, '..', 'Resources', 'bin', 'orca-ide')
+  ]
+  for (const d of [join(home, '.local', 'bin'), ...String(env.PATH ?? '').split(delimiter)]) {
+    if (d) out.push(join(d, 'orca'), join(d, 'orca-ide'))
+  }
+  return out
+}
+
+/** This plugin's key in `orca plugin list --json`: the installed one (shako-dev.shako) before a dev copy. */
+export function pickPluginKey(listText) {
+  let plugins = []
+  try {
+    plugins = JSON.parse(String(listText))?.result?.plugins ?? []
+  } catch {
+    return null
+  }
+  const ours = plugins.filter((p) => /\.shako$/.test(p.pluginKey ?? '') && (p.status ?? 'running') === 'running')
+  const installed = ours.find((p) => !p.isDev && !p.pluginKey.startsWith('local.'))
+  return (installed ?? ours[0])?.pluginKey ?? null
 }
 
 /** PATH for the commands we run. A GUI app's PATH often lacks these folders. */
@@ -200,9 +232,11 @@ export function statusBar(state) {
   if (!state.account.signedIn) {
     return {
       id: 'shako',
-      text: 'Shako: set up',
+      text: state.login.running ? 'Shako: approve in browser' : 'Shako: sign up',
       tone: 'warning',
-      tooltip: 'Open the Shako panel in the right sidebar to finish setup'
+      tooltip: state.login.running
+        ? 'Sign up or sign in in your browser, and approve this computer'
+        : 'Press to sign up or sign in'
     }
   }
   const c = state.credit
@@ -221,6 +255,7 @@ export function statusBar(state) {
 export function statusText(state) {
   if (!state.supported) return 'Shako needs macOS or Linux. On Windows, use Orca in WSL.'
   if (!state.cli.found) return 'Shako: the CLI is not installed. Open the Shako panel to install it.'
+  if (state.login.running) return 'Shako: sign up or sign in in your browser, and approve this computer.'
   if (!state.account.signedIn) return 'Shako: not signed in. Open the Shako panel to sign up or sign in.'
   const credit = state.credit
     ? ` ${formatDollars(state.credit.balance)} left, ${state.credit.runway} at the current spend.`
