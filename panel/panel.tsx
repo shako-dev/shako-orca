@@ -183,7 +183,6 @@ function VmRow({ vm, s }: { vm: Vm; s: ShakoState }) {
           <Code>{`ssh ${vm.name}.${s.account.sshDomain}`}</Code>
         </Text>
       ) : null}
-      <Link onPress={() => open(`${s.workspaceUrl}/?vm=${encodeURIComponent(vm.name)}`)}>Open in workspace</Link>
     </Box>
   )
 }
