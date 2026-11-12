@@ -1,16 +1,21 @@
-// The setup panel: three steps, each done by the official tool for it.
-// 1. the shako CLI (its installer), 2. the account (`shako login`, which registers this computer's
-// SSH key), 3. the skill for the agents (`npx skills add`, which the person runs).
+// The Shako panel: setup until it is done (the worker installs the CLI and the skill by itself on its
+// first start; signing in needs the person), then the credit and the VMs.
 import {
   atom,
   Badge,
+  Box,
   Button,
   Callout,
   Card,
   Code,
+  CodeView,
+  EmptyState,
   Heading,
+  IconButton,
+  Link,
   plugin,
   read,
+  RelativeTime,
   Row,
   set,
   shell,
@@ -19,15 +24,15 @@ import {
   Text,
   type PanelContext
 } from 'orca'
-import type { SetupState } from './protocol'
+import type { ShakoRequest, ShakoState, Vm } from './protocol'
 
-const state = atom<SetupState | null>(null)
+const state = atom<ShakoState | null>(null)
 const failure = atom<string | null>(null)
 
-async function ask(name: 'shako.refresh' | 'shako.installCli' | 'shako.login' | 'shako.cancelLogin') {
+async function ask(name: ShakoRequest) {
   try {
     set(failure, null)
-    set(state, await plugin.request(name, {}, { timeoutMs: 60_000 }))
+    set(state, await plugin.request(name, {}, { timeoutMs: 90_000 }))
   } catch (error) {
     set(failure, (error as Error).message)
   }
@@ -38,106 +43,165 @@ export function setup(ctx: PanelContext): void {
   void ask('shako.refresh')
 }
 
-function Done({ children }: { children: string }) {
-  return <Badge tone="success">{children}</Badge>
+const open = (url: string) => void shell.openExternal(url)
+
+function dollars(value: number | null): string {
+  if (value === null) return '?'
+  if (value > 0 && value < 0.01) return '<$0.01'
+  return `${value < 0 ? '-' : ''}$${Math.abs(value).toFixed(2)}`
 }
 
-function CliStep({ s }: { s: SetupState }) {
-  if (s.cli.found) {
-    return (
-      <Card title="1. Shako CLI">
-        <Row gap="sm">
-          <Done>Installed</Done>
-          <Text muted>shako {s.cli.version}</Text>
-        </Row>
-      </Card>
-    )
-  }
+function stateTone(vmState: string): 'success' | 'neutral' | 'warning' {
+  if (vmState === 'awake') return 'success'
+  if (vmState === 'asleep') return 'neutral'
+  return 'warning'
+}
+
+function Step({ title, done, children }: { title: string; done: boolean; children?: unknown }) {
   return (
-    <Card title="1. Shako CLI" description="The command your agents use to create VMs and host apps.">
-      <Stack gap="sm">
-        <Text muted>Runs the official installer. It needs python3 3.10 or newer.</Text>
-        <Code block>{s.install.command}</Code>
-        {s.install.running ? (
-          <Spinner label="Installing" />
-        ) : (
-          <Button icon="download" onPress={() => ask('shako.installCli')}>
-            Install the CLI
-          </Button>
-        )}
-        {s.install.error ? <Callout tone="danger" title="Install failed">{s.install.error}</Callout> : null}
-      </Stack>
-    </Card>
+    <Stack gap="xs">
+      <Row justify="between">
+        <Text weight="medium">{title}</Text>
+        <Badge tone={done ? 'success' : 'neutral'}>{done ? 'Done' : 'To do'}</Badge>
+      </Row>
+      {done ? null : children}
+    </Stack>
   )
 }
 
-function AccountStep({ s }: { s: SetupState }) {
-  if (s.account.signedIn) {
-    return (
-      <Card title="2. Account">
-        <Stack gap="xs">
-          <Row gap="sm">
-            <Done>Signed in</Done>
-            <Text>{s.account.tenant}</Text>
-          </Row>
-          <Text muted>{s.account.email ?? ''}</Text>
-          <Text muted>This computer's SSH key is registered.</Text>
-        </Stack>
-      </Card>
-    )
-  }
+function Setup({ s }: { s: ShakoState }) {
   return (
-    <Card
-      title="2. Account"
-      description="Sign up or sign in. Approving in the browser registers this computer's SSH key."
-    >
-      <Stack gap="sm">
-        {s.login.running ? (
-          <Stack gap="sm">
-            <Spinner label="Waiting for your approval in the browser" />
-            {s.login.link ? (
-              <Button icon="open-external" variant="outline" onPress={() => shell.openExternal(s.login.link!)}>
-                Open the approval page
+    <Card title="Setup" description="Three steps. Only signing in needs you.">
+      <Stack gap="md">
+        <Step title="1. Shako CLI" done={s.cli.found}>
+          {s.install.running ? (
+            <Spinner label="Installing the CLI" />
+          ) : (
+            <Stack gap="xs">
+              {s.install.error ? <Callout tone="danger" title="Install failed">{s.install.error}</Callout> : null}
+              <CodeView code={s.install.command} language="shell" wrap />
+              <Button icon="download" onPress={() => ask('shako.installCli')}>
+                Install the CLI
               </Button>
-            ) : null}
-            <Button variant="ghost" onPress={() => ask('shako.cancelLogin')}>
-              Cancel
-            </Button>
-          </Stack>
-        ) : (
-          <Button icon="link" disabled={!s.cli.found} onPress={() => ask('shako.login')}>
-            Sign up or sign in
-          </Button>
-        )}
-        <Text muted size="sm">Key name: {s.login.keyName}</Text>
-        {s.login.error ? <Callout tone="danger" title="Sign-in did not finish">{s.login.error}</Callout> : null}
+            </Stack>
+          )}
+        </Step>
+        <Step title="2. Account" done={s.account.signedIn}>
+          {s.login.running ? (
+            <Stack gap="xs">
+              <Spinner label="Waiting for your approval in the browser" />
+              {s.login.link ? (
+                <Button icon="open-external" variant="outline" onPress={() => open(s.login.link!)}>
+                  Open the approval page
+                </Button>
+              ) : null}
+              <Button variant="ghost" onPress={() => ask('shako.cancelLogin')}>
+                Cancel
+              </Button>
+            </Stack>
+          ) : (
+            <Stack gap="xs">
+              <Text muted size="sm">
+                Sign up or sign in. Approving in the browser registers this computer's SSH key ({s.login.keyName}).
+              </Text>
+              {s.login.error ? <Callout tone="danger" title="Sign-in did not finish">{s.login.error}</Callout> : null}
+              <Button icon="link" disabled={!s.cli.found} onPress={() => ask('shako.login')}>
+                Sign up or sign in
+              </Button>
+            </Stack>
+          )}
+        </Step>
+        <Step title="3. Skill for your agents" done={s.skill.installed}>
+          {s.skill.running ? (
+            <Spinner label="Installing the skill" />
+          ) : (
+            <Stack gap="xs">
+              <Text muted size="sm">Teaches every agent, in every project, to create VMs and host apps.</Text>
+              {s.skill.error ? <Callout tone="danger" title="Install failed">{s.skill.error}</Callout> : null}
+              <CodeView code={s.skill.command} language="shell" wrap />
+              <Button icon="download" onPress={() => ask('shako.installSkill')}>
+                Install the skill
+              </Button>
+            </Stack>
+          )}
+        </Step>
       </Stack>
     </Card>
   )
 }
 
-function SkillStep({ s }: { s: SetupState }) {
-  if (s.skill.installed) {
+function CreditCard({ s }: { s: ShakoState }) {
+  const c = s.credit
+  if (!c) {
     return (
-      <Card title="3. Skill for your agents">
-        <Row gap="sm">
-          <Done>Installed</Done>
-          <Text muted>Every project's agents know Shako.</Text>
-        </Row>
+      <Card title="Credit">
+        <Text muted>Could not read the credit. Press refresh to try again.</Text>
       </Card>
     )
   }
   return (
-    <Card
-      title="3. Skill for your agents"
-      description="Teaches every agent, in every project, to create VMs and host apps."
-    >
+    <Card title="Credit">
+      <Stack gap="xs">
+        <Row justify="between">
+          <Text weight="semibold">{dollars(c.balance)} left</Text>
+          <Badge tone={c.tone}>{c.runway}</Badge>
+        </Row>
+        <Text muted size="sm">
+          {c.perDay === null
+            ? `${dollars(c.used)} used so far.`
+            : `Spending ${dollars(c.perDay)} a day at the current VM states. ${dollars(c.used)} used so far.`}
+        </Text>
+        {c.tone === 'success' ? null : (
+          <Callout tone={c.tone} title="Credit is running low">
+            Add credit in the workspace, under Account. A VM stops when the credit runs out.
+          </Callout>
+        )}
+        <Link onPress={() => open(s.workspaceUrl)}>Add credit in the workspace</Link>
+      </Stack>
+    </Card>
+  )
+}
+
+function VmRow({ vm, s }: { vm: Vm; s: ShakoState }) {
+  const agents = vm.agents && vm.agents !== '-' ? ` · agents: ${vm.agents}` : ''
+  return (
+    <Box border radius="md" padding="sm" direction="column" gap="xs">
+      <Row justify="between">
+        <Text weight="semibold" truncate>
+          {vm.name}
+        </Text>
+        <Badge tone={stateTone(vm.state)}>{vm.state}</Badge>
+      </Row>
+      <Text muted size="sm">
+        {`${vm.size} · ${vm.disk} disk · sleep ${vm.sleep}`}
+      </Text>
+      <Text muted size="sm">
+        {`active ${vm.active}${agents}`}
+      </Text>
+      {s.account.sshDomain ? (
+        <Text size="sm" truncate>
+          <Code>{`ssh ${vm.name}.${s.account.sshDomain}`}</Code>
+        </Text>
+      ) : null}
+      <Link onPress={() => open(`${s.workspaceUrl}/?vm=${encodeURIComponent(vm.name)}`)}>Open in workspace</Link>
+    </Box>
+  )
+}
+
+function VmList({ s }: { s: ShakoState }) {
+  return (
+    <Card title={`VMs (${s.vms.length})`}>
       <Stack gap="sm">
-        <Text muted>Run this once in any terminal:</Text>
-        <Code block>{s.skill.command}</Code>
-        <Button icon="refresh" variant="outline" onPress={() => ask('shako.refresh')}>
-          Check again
-        </Button>
+        {s.vmsError ? <Callout tone="danger">{s.vmsError}</Callout> : null}
+        {s.vms.length === 0 && !s.vmsError ? (
+          <EmptyState
+            icon="cloud"
+            title="No VMs yet"
+            description='Ask any agent: "Create a Shako VM and host this app."'
+          />
+        ) : (
+          s.vms.map((vm) => <VmRow vm={vm} s={s} />)
+        )}
       </Stack>
     </Card>
   )
@@ -146,10 +210,20 @@ function SkillStep({ s }: { s: SetupState }) {
 export default function Panel() {
   const s = read(state)
   const error = read(failure)
+  const setupDone = s ? s.cli.found && s.account.signedIn && s.skill.installed : false
   return (
     <Stack gap="md">
-      <Heading>Shako</Heading>
-      <Text muted>Cloud VMs that sleep when idle. Your agents create them and host apps on them.</Text>
+      <Row justify="between">
+        <Stack gap="none">
+          <Heading>Shako</Heading>
+          {s?.account.signedIn ? (
+            <Text muted size="sm">
+              {`${s.account.tenant} · ${s.account.email ?? ''}`}
+            </Text>
+          ) : null}
+        </Stack>
+        <IconButton icon="refresh" label="Refresh" onPress={() => ask('shako.refresh')} />
+      </Row>
       {error ? <Callout tone="danger">{error}</Callout> : null}
       {!s ? (
         <Spinner label="Checking setup" />
@@ -159,13 +233,13 @@ export default function Panel() {
         </Callout>
       ) : (
         <Stack gap="md">
-          <CliStep s={s} />
-          <AccountStep s={s} />
-          <SkillStep s={s} />
-          {s.account.signedIn && s.skill.installed ? (
-            <Callout tone="success" title="Ready">
-              Ask any agent: "Create a Shako VM and host this app."
-            </Callout>
+          {setupDone ? null : <Setup s={s} />}
+          {s.account.signedIn ? <CreditCard s={s} /> : null}
+          {s.account.signedIn ? <VmList s={s} /> : null}
+          {s.updatedAt ? (
+            <Text muted size="xs">
+              Updated <RelativeTime at={s.updatedAt} />
+            </Text>
           ) : null}
         </Stack>
       )}
