@@ -316,7 +316,9 @@ export function statusBar(state) {
     id: 'shako',
     text: `Shako ${formatDollars(c.balance)}`,
     tone: c.tone,
-    tooltip: `${state.account.tenant}: ${formatDollars(c.balance)} left, ${c.runway} at the current spend`
+    tooltip: c.days === null
+      ? `${state.account.tenant}: ${formatDollars(c.balance)} left`
+      : `${state.account.tenant}: ${formatDollars(c.balance)} left, ${c.runway} at the current spend`
   }
 }
 

@@ -214,18 +214,31 @@ export default async function activate(orca) {
     state.credit = credit.code === 0 ? creditSummary(parseCredit(credit.stdout), state.vms, me.rates) : null
   }
 
+  // One refresh at a time. A refresh asked for while one runs makes it run once more after, so the answer
+  // is never older than the ask: login's refresh after an approval must not get a run that began before it.
   let refreshing = null
+  let again = false
+  const refreshOnce = async () => {
+    if (SUPPORTED) {
+      state.cli = await findCli()
+      await readAccount()
+      let installed = false
+      for (const path of skillPaths(HOME)) installed ||= await exists(path)
+      state.skill.installed = installed
+      state.updatedAt = Date.now()
+    }
+    await publish()
+  }
   const refresh = () => {
-    refreshing ??= (async () => {
-      if (SUPPORTED) {
-        state.cli = await findCli()
-        await readAccount()
-        let installed = false
-        for (const path of skillPaths(HOME)) installed ||= await exists(path)
-        state.skill.installed = installed
-        state.updatedAt = Date.now()
-      }
-      await publish()
+    if (refreshing) {
+      again = true
+      return refreshing
+    }
+    refreshing = (async () => {
+      do {
+        again = false
+        await refreshOnce()
+      } while (again)
     })().finally(() => {
       refreshing = null
     })
