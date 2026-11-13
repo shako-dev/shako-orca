@@ -162,7 +162,11 @@ export default async function activate(orca) {
     updatedAt: null
   }
 
+  // The log (`orca plugin logs shako-dev.shako`) gets a line each time what the panel shows for the account changes.
+  let logged = ''
   const publish = async () => {
+    const shown = `account ${state.account.signedIn ? `logged in as ${state.account.tenant}` : 'not logged in'}, login ${state.login.running ? 'running' : 'not running'}`
+    if (shown !== logged) orca.log(`panel: ${(logged = shown)}`)
     orca.panels.post('shako.state', state)
     try {
       await orca.host.call('statusBar.update', statusBar(state))
@@ -180,7 +184,10 @@ export default async function activate(orca) {
     if (!state.cli.found) return
     const whoami = await run(state.cli.path, ['whoami'], { timeoutMs: 30_000 })
     const me = whoami.code === 0 ? parseWhoami(whoami.stdout) : null
-    if (!me) return
+    if (!me) {
+      orca.log(`shako whoami: exit ${whoami.code}: ${lastLine(whoami.stderr || whoami.stdout)}`)
+      return
+    }
     state.account = { signedIn: true, tenant: me.tenant, email: me.email, sshDomain: me.sshDomain }
     const [vms, credit] = await Promise.all([
       run(state.cli.path, ['vm', 'ls'], { timeoutMs: 30_000 }),
@@ -284,6 +291,7 @@ export default async function activate(orca) {
   const login = async () => {
     if (state.login.running || !state.cli.found || state.account.signedIn) return state
     state.login = { ...state.login, running: true, link: null, error: null }
+    orca.log('shako login: started')
     await publish()
     const result = await run(state.cli.path, ['login', '--name', state.login.keyName], {
       timeoutMs: 11 * 60_000,
@@ -299,6 +307,7 @@ export default async function activate(orca) {
       }
     })
     loginChild = null
+    orca.log(`shako login: exit ${result.code}: ${lastLine(result.stdout || result.stderr)}`)
     state.login.running = false
     state.login.link = null
     if (result.code !== 0 || !parseLoggedIn(result.stdout)) {
