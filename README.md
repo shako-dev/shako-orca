@@ -44,11 +44,15 @@ workspace.
 1. In Orca: Settings → Experimental → **Cloud VM**, on.
 2. Create a workspace and choose **Shako VM** under **Run on**.
 
+The VM clones the project from its Git host itself, so no code is uploaded from your laptop: a large repo
+takes seconds, not minutes. A private GitHub repo clones with your laptop's `gh` login (`gh auth token`), given to
+git on the VM for that one command and never stored; another host uses your SSH agent. The workspace's start commit
+must be pushed; if it is not, the recipe stops at once and says so. Nothing waits for input.
+
 The VM is a copy of your VM `orca-base` when you have one, so its agents stay logged in: make one, log in your
 agents there, and every workspace starts ready. Without it, each workspace gets a new small VM with Claude Code and
-Codex. Your laptop pushes the project's code to the VM over SSH, so the VM needs no Git credentials. The VM sleeps
-when idle. The recipe (`recipes/shako-vm.json`) is a short shell script per phase over the `shako` CLI
-(`vm create`, `vm cp`, `vm info`, `vm wake`, `vm sleep`, `vm rm`), `ssh` and `git push`.
+Codex. The VM sleeps when idle. The recipe (`recipes/shako-vm.json`) is a short shell script per phase over the
+`shako` CLI (`vm create`, `vm cp`, `vm info`, `vm wake`, `vm sleep`, `vm rm`) and `ssh`.
 
 ## What the plugin does on your computer
 
