@@ -38,10 +38,13 @@ const HOME = homedir()
 const SUPPORTED = process.platform !== 'win32'
 const ENV = { ...process.env, PATH: commandPath(process.env, HOME) }
 const POLL_MS = 5 * 60_000
+const LOGIN_POLL_MS = 5_000
 
 /** The running `shako login`, so Cancel and a stopping worker can end it. */
 let loginChild = null
 let pollTimer = null
+/** True from a login's start until the panel shows the account, or the login fails. */
+let awaitingLogin = false
 
 /** Orca awaits this before it stops the worker. */
 export function deactivate() {
@@ -214,31 +217,18 @@ export default async function activate(orca) {
     state.credit = credit.code === 0 ? creditSummary(parseCredit(credit.stdout), state.vms, me.rates) : null
   }
 
-  // One refresh at a time. A refresh asked for while one runs makes it run once more after, so the answer
-  // is never older than the ask: login's refresh after an approval must not get a run that began before it.
   let refreshing = null
-  let again = false
-  const refreshOnce = async () => {
-    if (SUPPORTED) {
-      state.cli = await findCli()
-      await readAccount()
-      let installed = false
-      for (const path of skillPaths(HOME)) installed ||= await exists(path)
-      state.skill.installed = installed
-      state.updatedAt = Date.now()
-    }
-    await publish()
-  }
   const refresh = () => {
-    if (refreshing) {
-      again = true
-      return refreshing
-    }
-    refreshing = (async () => {
-      do {
-        again = false
-        await refreshOnce()
-      } while (again)
+    refreshing ??= (async () => {
+      if (SUPPORTED) {
+        state.cli = await findCli()
+        await readAccount()
+        let installed = false
+        for (const path of skillPaths(HOME)) installed ||= await exists(path)
+        state.skill.installed = installed
+        state.updatedAt = Date.now()
+      }
+      await publish()
     })().finally(() => {
       refreshing = null
     })
@@ -297,6 +287,7 @@ export default async function activate(orca) {
   const login = async () => {
     if (state.login.running || !state.cli.found || state.account.signedIn) return state
     state.login = { ...state.login, running: true, link: null, error: null }
+    awaitingLogin = true
     await publish()
     const result = await run(state.cli.path, ['login', '--name', state.login.keyName], {
       timeoutMs: 11 * 60_000,
@@ -314,7 +305,9 @@ export default async function activate(orca) {
     loginChild = null
     state.login.running = false
     state.login.link = null
-    if (result.code !== 0 || !parseLoggedIn(result.stdout)) {
+    const loggedIn = result.code === 0 && parseLoggedIn(result.stdout)
+    if (!loggedIn) {
+      awaitingLogin = false
       const why = lastLine(result.stderr || result.stdout)
       // The CLI's words ("run shako login again") are for a terminal: say what to press here.
       state.login.error = /no approval came|not approved|cancelled/i.test(why) || result.code === -1
@@ -322,7 +315,7 @@ export default async function activate(orca) {
         : why || 'This computer is not registered yet.'
     }
     await refresh()
-    if (state.account.signedIn) {
+    if (loggedIn) {
       void openPanel(orca.log) // the panel now shows the credit and the VMs
       await orca.host
         .call('notifications.show', {
@@ -411,7 +404,14 @@ export default async function activate(orca) {
   })
 
   await refresh()
-  pollTimer = setInterval(() => void updateCliWhenDue().then(refresh), POLL_MS)
+  // Every 5 s while a login waits for the account (until the panel shows it), else every 5 min.
+  let polledAt = Date.now()
+  pollTimer = setInterval(() => {
+    if (state.account.signedIn) awaitingLogin = false
+    if (!awaitingLogin && Date.now() - polledAt < POLL_MS) return
+    polledAt = Date.now()
+    void updateCliWhenDue().then(refresh)
+  }, LOGIN_POLL_MS)
 
   // First start after install, once: show the panel, install what is missing, and when this computer is not
   // logged in, start `shako login`, which opens the browser for the log in or sign-up. Later starts never open
