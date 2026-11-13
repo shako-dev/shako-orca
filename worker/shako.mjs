@@ -303,11 +303,9 @@ export function statusBar(state) {
   if (!state.account.signedIn) {
     return {
       id: 'shako',
-      text: state.login.running ? 'Shako: approve in browser' : 'Shako: sign up',
+      text: state.login.running ? 'Shako: approve in browser' : 'Shako: log in',
       tone: 'warning',
-      tooltip: state.login.running
-        ? 'Sign up or sign in in your browser, and approve this computer'
-        : 'Press to sign up or sign in'
+      tooltip: state.login.running ? 'Approve this computer in your browser' : 'Open the Shako panel to log in'
     }
   }
   const c = state.credit
@@ -326,8 +324,8 @@ export function statusBar(state) {
 export function statusText(state) {
   if (!state.supported) return 'Shako needs macOS or Linux. On Windows, use Orca in WSL.'
   if (!state.cli.found) return 'Shako: the CLI is not installed. Open the Shako panel to install it.'
-  if (state.login.running) return 'Shako: sign up or sign in in your browser, and approve this computer.'
-  if (!state.account.signedIn) return 'Shako: not signed in. Open the Shako panel to sign up or sign in.'
+  if (state.login.running) return 'Shako: approve this computer in your browser.'
+  if (!state.account.signedIn) return 'Shako: not logged in. Step 3 of the Shako panel logs you in.'
   const credit = state.credit
     ? ` ${formatDollars(state.credit.balance)} left, ${state.credit.runway} at the current spend.`
     : ''

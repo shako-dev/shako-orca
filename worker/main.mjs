@@ -305,8 +305,8 @@ export default async function activate(orca) {
       const why = lastLine(result.stderr || result.stdout)
       // The CLI's words ("run shako login again") are for a terminal: say what to press here.
       state.login.error = /no approval came|not approved|cancelled/i.test(why) || result.code === -1
-        ? 'Sign-up was not finished. Press Sign up or sign in to continue where you left off.'
-        : why || 'Sign-up was not finished.'
+        ? 'This computer is not registered yet. Press Register this computer to try again.'
+        : why || 'This computer is not registered yet.'
     }
     await refresh()
     if (state.account.signedIn) {
@@ -390,13 +390,9 @@ export default async function activate(orca) {
     return { copied: false }
   })
 
-  // The status bar item runs this. It shows the panel, and when nobody is signed in it starts sign-in.
+  // The status bar item runs this: it shows the panel.
   orca.commands.register('shako.status', async () => {
     void openPanel(orca.log)
-    if (state.cli.found && !state.account.signedIn && !state.login.running) {
-      void login()
-      return 'Shako: a page opened in your browser. Sign up or sign in there, and approve this computer.'
-    }
     await refresh()
     return statusText(state)
   })
@@ -404,9 +400,8 @@ export default async function activate(orca) {
   await refresh()
   pollTimer = setInterval(() => void updateCliWhenDue().then(refresh), POLL_MS)
 
-  // First start after install, once: show the panel, install what is missing, and start sign-in,
-  // which opens the sign-up page in the browser. The skill installs while the person signs up.
-  // Later starts never open the browser by themselves; the status bar item starts sign-in.
+  // First start after install, once: show the panel, install what is missing, and say where to log in.
+  // The browser opens only when the person presses Register this computer.
   if ((await orca.storage.get('autoSetup')) !== true) {
     await orca.storage.set('autoSetup', true)
     void openPanel(orca.log)
@@ -415,17 +410,11 @@ export default async function activate(orca) {
       await orca.storage.set('cliUpdateTriedAt', Date.now()) // just installed: it is the newest
     }
     const skill = state.skill.installed ? Promise.resolve() : installSkill()
-    if (state.cli.found && !state.account.signedIn) {
-      await orca.host
-        .call('notifications.show', {
-          title: 'Shako: sign up in your browser',
-          body: 'A page opened in your browser. Sign up or sign in there, and approve this computer.'
-        })
-        .catch(() => undefined)
-      await login()
-    } else if (state.account.signedIn) {
-      void openPanel(orca.log)
-    }
+    await orca.host
+      .call('notifications.show', state.account.signedIn
+        ? { title: 'Shako is installed', body: 'Your VMs are in the Shako panel.' }
+        : { title: 'Shako is installed', body: 'Open the Shako panel on the right to log in.' })
+      .catch(() => undefined)
     await skill
   }
   await updateCliWhenDue()

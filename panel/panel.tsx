@@ -14,6 +14,7 @@ import {
   EmptyState,
   IconButton,
   Input,
+  Link,
   plugin,
   Progress,
   read,
@@ -120,13 +121,33 @@ function Setup({ s }: { s: ShakoState }) {
           </Stack>
         )}
       </Step>
-      <Step title="2. Account" done={s.account.signedIn}>
+      <Step title="2. Skill for your agents" done={s.skill.installed}>
+        {s.skill.running ? (
+          <Spinner label="Installing the skill" />
+        ) : (
+          <Stack gap="xs">
+            {s.skill.error ? <Text tone="danger" size="sm">{`Install failed: ${s.skill.error}`}</Text> : null}
+            <CodeView code={s.skill.command} language="shell" wrap />
+            <Button size="sm" icon="download" onPress={() => ask('shako.installSkill')}>
+              Install the skill
+            </Button>
+          </Stack>
+        )}
+      </Step>
+      <Step title="3. Log in" done={s.account.signedIn}>
+        <Text muted size="sm">
+          Finish these two steps. Then this panel shows your VMs by itself.
+        </Text>
+        <Text size="sm" weight="medium">
+          a. Sign up, if you have no account
+        </Text>
+        <Link onPress={() => open(`${s.workspaceUrl}/login`)}>Sign up at workspace.shako.dev</Link>
+        <Text size="sm" weight="medium">
+          b. Register this computer
+        </Text>
         {s.login.running ? (
           <Stack gap="xs">
-            <Spinner label="Finish in your browser" />
-            <Text muted size="sm">1. Enter your email, then open the link we send you.</Text>
-            <Text muted size="sm">2. Choose your name. It goes in your VM addresses.</Text>
-            <Text muted size="sm">3. Approve this computer.</Text>
+            <Spinner label="Approve this computer in your browser" />
             <Row gap="xs">
               {s.login.link ? (
                 <Button size="sm" icon="open-external" variant="outline" onPress={() => open(s.login.link!)}>
@@ -141,24 +162,11 @@ function Setup({ s }: { s: ShakoState }) {
         ) : (
           <Stack gap="xs">
             <Text muted size="sm">
-              {`Sign up or sign in. Approving in the browser registers this computer's SSH key (${s.login.keyName}).`}
+              {`Opens your browser to approve this computer's SSH key (${s.login.keyName}).`}
             </Text>
             {s.login.error ? <Text tone="danger" size="sm">{s.login.error}</Text> : null}
             <Button size="sm" icon="link" disabled={!s.cli.found} onPress={() => ask('shako.login')}>
-              Sign up or sign in
-            </Button>
-          </Stack>
-        )}
-      </Step>
-      <Step title="3. Skill for your agents" done={s.skill.installed}>
-        {s.skill.running ? (
-          <Spinner label="Installing the skill" />
-        ) : (
-          <Stack gap="xs">
-            {s.skill.error ? <Text tone="danger" size="sm">{`Install failed: ${s.skill.error}`}</Text> : null}
-            <CodeView code={s.skill.command} language="shell" wrap />
-            <Button size="sm" icon="download" onPress={() => ask('shako.installSkill')}>
-              Install the skill
+              Register this computer
             </Button>
           </Stack>
         )}

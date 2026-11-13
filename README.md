@@ -25,8 +25,8 @@ This repository holds two things:
    Orca prints what the plugin may do and a fingerprint. Run the same command again with
    `--approve <fingerprint>`.
 
-2. A page opens in your browser: sign up or sign in, and approve this computer. If you close it,
-   press **Shako: sign up** in the status bar to open it again.
+2. Open the **Shako** panel in the right sidebar. Step 3, **Log in**: sign up at workspace.shako.dev if you have no
+   account, then press **Register this computer** and approve it in your browser. The panel then shows your VMs.
 
 Then ask any agent: *"Create a Shako VM and host this app."*
 
@@ -89,6 +89,10 @@ orca plugin validate . --json
 orca plugin check . --json
 orca plugin dev load .
 ```
+
+## Support
+
+https://discord.gg/Q93fEaF3A
 
 ## License
 
