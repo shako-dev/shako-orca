@@ -317,9 +317,6 @@ export default async function activate(orca) {
         ? 'Not logged in yet. Press Log in or sign up to continue.'
         : why || 'This computer is not registered yet.'
     }
-    // A read that began before the approval can still run, and its answer is "not logged in": let it end,
-    // then read again.
-    await refreshing
     await refresh()
     if (state.account.signedIn) {
       void openPanel(orca.log) // the panel now shows the credit and the VMs
@@ -409,30 +406,36 @@ export default async function activate(orca) {
     return statusText(state)
   })
 
-  await refresh()
   pollTimer = setInterval(() => void updateCliWhenDue().then(refresh), POLL_MS)
 
-  // First start after install, once: show the panel, install what is missing, and when this computer is not
-  // logged in, start `shako login`, which opens the browser for the log in or sign-up. Later starts never open
-  // the browser by themselves: step 3's button does.
-  if ((await orca.storage.get('autoSetup')) !== true) {
-    await orca.storage.set('autoSetup', true)
-    void openPanel(orca.log)
-    if (!state.cli.found) {
-      await installCli()
-      await orca.storage.set('cliUpdateTriedAt', Date.now()) // just installed: it is the newest
+  // Orca restarts a worker that is not ready 10 s after its start, and the new worker knows nothing of a login
+  // that the old one started. So the start ends here, and the rest runs after it.
+  void startUp().catch((error) => orca.log(`start: ${error?.message ?? error}`))
+
+  // The first read. Then, on the first start after install only: show the panel, install what is missing, and when
+  // this computer is not logged in, start `shako login`, which opens the browser for the log in or sign-up. Later
+  // starts never open the browser by themselves: step 3's button does.
+  async function startUp() {
+    await refresh()
+    if ((await orca.storage.get('autoSetup')) !== true) {
+      await orca.storage.set('autoSetup', true)
+      void openPanel(orca.log)
+      if (!state.cli.found) {
+        await installCli()
+        await orca.storage.set('cliUpdateTriedAt', Date.now()) // just installed: it is the newest
+      }
+      const skill = state.skill.installed ? Promise.resolve() : installSkill()
+      const loggingIn = state.cli.found && !state.account.signedIn
+      await orca.host
+        .call('notifications.show', state.account.signedIn
+          ? { title: 'Shako is installed', body: 'Your VMs are in the Shako panel.' }
+          : loggingIn
+            ? { title: 'Shako is installed', body: 'Log in or sign up in the browser page that opened.' }
+            : { title: 'Shako is installed', body: 'Open the Shako panel on the right to log in.' })
+        .catch(() => undefined)
+      if (loggingIn) await login()
+      await skill
     }
-    const skill = state.skill.installed ? Promise.resolve() : installSkill()
-    const loggingIn = state.cli.found && !state.account.signedIn
-    await orca.host
-      .call('notifications.show', state.account.signedIn
-        ? { title: 'Shako is installed', body: 'Your VMs are in the Shako panel.' }
-        : loggingIn
-          ? { title: 'Shako is installed', body: 'Log in or sign up in the browser page that opened.' }
-          : { title: 'Shako is installed', body: 'Open the Shako panel on the right to log in.' })
-      .catch(() => undefined)
-    if (loggingIn) await login()
-    await skill
+    await updateCliWhenDue()
   }
-  await updateCliWhenDue()
 }
