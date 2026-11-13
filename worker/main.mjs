@@ -38,13 +38,10 @@ const HOME = homedir()
 const SUPPORTED = process.platform !== 'win32'
 const ENV = { ...process.env, PATH: commandPath(process.env, HOME) }
 const POLL_MS = 5 * 60_000
-const LOGIN_POLL_MS = 5_000
 
 /** The running `shako login`, so Cancel and a stopping worker can end it. */
 let loginChild = null
 let pollTimer = null
-/** True from a login's start until the panel shows the account, or the login fails. */
-let awaitingLogin = false
 
 /** Orca awaits this before it stops the worker. */
 export function deactivate() {
@@ -287,7 +284,6 @@ export default async function activate(orca) {
   const login = async () => {
     if (state.login.running || !state.cli.found || state.account.signedIn) return state
     state.login = { ...state.login, running: true, link: null, error: null }
-    awaitingLogin = true
     await publish()
     const result = await run(state.cli.path, ['login', '--name', state.login.keyName], {
       timeoutMs: 11 * 60_000,
@@ -305,17 +301,18 @@ export default async function activate(orca) {
     loginChild = null
     state.login.running = false
     state.login.link = null
-    const loggedIn = result.code === 0 && parseLoggedIn(result.stdout)
-    if (!loggedIn) {
-      awaitingLogin = false
+    if (result.code !== 0 || !parseLoggedIn(result.stdout)) {
       const why = lastLine(result.stderr || result.stdout)
       // The CLI's words ("run shako login again") are for a terminal: say what to press here.
       state.login.error = /no approval came|not approved|cancelled/i.test(why) || result.code === -1
         ? 'Not logged in yet. Press Log in or sign up to continue.'
         : why || 'This computer is not registered yet.'
     }
+    // A read that began before the approval can still run, and its answer is "not logged in": let it end,
+    // then read again.
+    await refreshing
     await refresh()
-    if (loggedIn) {
+    if (state.account.signedIn) {
       void openPanel(orca.log) // the panel now shows the credit and the VMs
       await orca.host
         .call('notifications.show', {
@@ -404,14 +401,7 @@ export default async function activate(orca) {
   })
 
   await refresh()
-  // Every 5 s while a login waits for the account (until the panel shows it), else every 5 min.
-  let polledAt = Date.now()
-  pollTimer = setInterval(() => {
-    if (state.account.signedIn) awaitingLogin = false
-    if (!awaitingLogin && Date.now() - polledAt < POLL_MS) return
-    polledAt = Date.now()
-    void updateCliWhenDue().then(refresh)
-  }, LOGIN_POLL_MS)
+  pollTimer = setInterval(() => void updateCliWhenDue().then(refresh), POLL_MS)
 
   // First start after install, once: show the panel, install what is missing, and when this computer is not
   // logged in, start `shako login`, which opens the browser for the log in or sign-up. Later starts never open
