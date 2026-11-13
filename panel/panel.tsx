@@ -14,7 +14,6 @@ import {
   EmptyState,
   IconButton,
   Input,
-  Link,
   plugin,
   Progress,
   read,
@@ -134,20 +133,10 @@ function Setup({ s }: { s: ShakoState }) {
           </Stack>
         )}
       </Step>
-      <Step title="3. Log in" done={s.account.signedIn}>
-        <Text muted size="sm">
-          Finish these two steps. Then this panel shows your VMs by itself.
-        </Text>
-        <Text size="sm" weight="medium">
-          a. Sign up, if you have no account
-        </Text>
-        <Link onPress={() => open(`${s.workspaceUrl}/login`)}>Sign up at workspace.shako.dev</Link>
-        <Text size="sm" weight="medium">
-          b. Register this computer
-        </Text>
+      <Step title="3. Log In and Register Machine" done={s.account.signedIn}>
         {s.login.running ? (
           <Stack gap="xs">
-            <Spinner label="Approve this computer in your browser" />
+            <Spinner label="Finish in your browser" />
             <Row gap="xs">
               {s.login.link ? (
                 <Button size="sm" icon="open-external" variant="outline" onPress={() => open(s.login.link!)}>
@@ -161,12 +150,9 @@ function Setup({ s }: { s: ShakoState }) {
           </Stack>
         ) : (
           <Stack gap="xs">
-            <Text muted size="sm">
-              {`Opens your browser to approve this computer's SSH key (${s.login.keyName}).`}
-            </Text>
             {s.login.error ? <Text tone="danger" size="sm">{s.login.error}</Text> : null}
             <Button size="sm" icon="link" disabled={!s.cli.found} onPress={() => ask('shako.login')}>
-              Register this computer
+              Log in or sign up
             </Button>
           </Stack>
         )}

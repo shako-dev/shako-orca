@@ -305,7 +305,7 @@ export default async function activate(orca) {
       const why = lastLine(result.stderr || result.stdout)
       // The CLI's words ("run shako login again") are for a terminal: say what to press here.
       state.login.error = /no approval came|not approved|cancelled/i.test(why) || result.code === -1
-        ? 'This computer is not registered yet. Press Register this computer to try again.'
+        ? 'Not logged in yet. Press Log in or sign up to continue.'
         : why || 'This computer is not registered yet.'
     }
     await refresh()
@@ -401,7 +401,7 @@ export default async function activate(orca) {
   pollTimer = setInterval(() => void updateCliWhenDue().then(refresh), POLL_MS)
 
   // First start after install, once: show the panel, install what is missing, and say where to log in.
-  // The browser opens only when the person presses Register this computer.
+  // The browser opens only when the person presses Log in or sign up.
   if ((await orca.storage.get('autoSetup')) !== true) {
     await orca.storage.set('autoSetup', true)
     void openPanel(orca.log)
