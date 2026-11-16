@@ -45,11 +45,17 @@ workspace.
 2. Create a workspace and choose **Shako VM** under **Run on**.
 
 The VM clones the project from its Git host itself, so no code is uploaded from your laptop: a large repo
-takes seconds, not minutes. A GitHub repo clones with your laptop's `gh` login (`gh auth token`). The VM keeps
-that token for github.com only, in `~/.git-credentials` (readable only by the user `shako`), so it can fetch and
-push, and Orca's check of `origin` passes; the token goes with the VM when the workspace is deleted. A
-`git@github.com:` remote becomes HTTPS on the VM. Another Git host uses your SSH agent for the clone. The workspace's
-start commit must be pushed; if it is not, the recipe stops at once and says so. Nothing waits for input.
+takes seconds, not minutes. The recipe reads no token on your computer and forwards no SSH agent: the VM clones
+over HTTPS with only the Git access it has itself. A public repo needs none. For a private repo, give your VM
+`orca-base` Git access once, and every workspace VM, a copy of it, has it too. When the clone fails, the recipe
+stops and prints the command for your Git host; for GitHub:
+
+```sh
+gh auth token | ssh orca-base.<tenant>.shako.dev 'umask 077 && git config --global credential.helper store && printf "protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n\n" "$(cat)" | git credential approve'
+```
+
+A fine-grained token that covers only your repositories works the same way. The workspace's start commit must be
+pushed; if it is not, the recipe stops at once and says so. Nothing waits for input.
 
 The VM is a copy of your VM `orca-base` when you have one, so its agents stay logged in: make one, log in your
 agents there, and every workspace starts ready. Without it, each workspace gets a new small VM with Claude Code and
