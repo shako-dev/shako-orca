@@ -1,8 +1,20 @@
 // Pure parts of the plugin: no Orca API, so node --test covers them (test/shako.test.mjs).
-import { delimiter, dirname, join } from 'node:path'
+import { join, posix, win32 } from 'node:path'
 
-/** The official installer of the shako CLI. It installs into ~/.local/bin and needs python3 3.10+. */
-export const INSTALL_COMMAND = 'curl -fsSL https://shako.dev/install.sh | sh'
+const pathFor = (platform) => (platform === 'win32' ? win32 : posix)
+
+/** The official installer of the shako CLI: install.sh puts it in ~/.local/bin, install.ps1 in %LOCALAPPDATA%\shako\bin. */
+export function installCommand(platform) {
+  return platform === 'win32' ? 'irm https://shako.dev/install.ps1 | iex' : 'curl -fsSL https://shako.dev/install.sh | sh'
+}
+
+/** The installer as [file, args]: in PowerShell on Windows, in sh elsewhere. */
+export function installRun(platform) {
+  const command = installCommand(platform)
+  return platform === 'win32'
+    ? ['powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command]]
+    : ['/bin/sh', ['-c', command]]
+}
 
 /** The official install of the Shako skill, for every coding agent on this computer, with no prompts. */
 export const SKILL_COMMAND =
@@ -27,16 +39,31 @@ export function skillPaths(home) {
   ]
 }
 
+/** The name of the PATH variable: Windows spells it Path, and a copy of process.env keeps that spelling. */
+export function pathKey(env) {
+  return Object.keys(env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH'
+}
+
+/** The folder of install.ps1: %LOCALAPPDATA%\shako\bin. */
+function windowsCliDir(env, home) {
+  return win32.join(env.LOCALAPPDATA || win32.join(home, 'AppData', 'Local'), 'shako', 'bin')
+}
+
 /** Paths to try for the CLI, first match wins: SHAKO_CLI, the installer's folder, then PATH. */
-export function cliCandidates(env, home) {
-  const dirs = [join(home, '.local', 'bin'), ...String(env.PATH ?? '').split(delimiter)]
-  dirs.push('/usr/local/bin', '/opt/homebrew/bin')
+export function cliCandidates(env, home, platform = process.platform) {
+  const path = pathFor(platform)
+  const fromPath = String(env[pathKey(env)] ?? '').split(path.delimiter)
+  const dirs =
+    platform === 'win32'
+      ? [windowsCliDir(env, home), ...fromPath]
+      : [path.join(home, '.local', 'bin'), ...fromPath, '/usr/local/bin', '/opt/homebrew/bin']
+  const name = platform === 'win32' ? 'shako.exe' : 'shako'
   const seen = new Set()
   const out = env.SHAKO_CLI ? [env.SHAKO_CLI] : []
   for (const dir of dirs) {
     if (!dir || seen.has(dir)) continue
     seen.add(dir)
-    out.push(join(dir, 'shako'))
+    out.push(path.join(dir, name))
   }
   return out
 }
@@ -44,18 +71,24 @@ export function cliCandidates(env, home) {
 /**
  * Orca's own CLI, for `orca plugin open` (show this plugin's panel). The worker runs in Orca's app
  * binary, so the CLI that ships with the app is found next to it first: resources/bin/orca-ide on
- * Linux (checked), Contents/Resources/bin/orca on macOS. Then a registered `orca` on PATH.
+ * Linux (checked), Contents/Resources/bin/orca on macOS, resources\bin\orca.cmd on Windows (Orca's
+ * own code names it). Then a registered `orca` on PATH.
  */
-export function orcaCliCandidates(execPath, env, home) {
-  const dir = dirname(String(execPath))
+export function orcaCliCandidates(execPath, env, home, platform = process.platform) {
+  const path = pathFor(platform)
+  const dir = path.dirname(String(execPath))
+  const fromPath = String(env[pathKey(env)] ?? '').split(path.delimiter)
+  if (platform === 'win32') {
+    return [path.join(dir, 'resources', 'bin', 'orca.cmd'), ...fromPath.filter(Boolean).map((d) => path.join(d, 'orca.cmd'))]
+  }
   const out = [
-    join(dir, 'resources', 'bin', 'orca-ide'),
-    join(dir, 'resources', 'bin', 'orca'),
-    join(dir, '..', 'Resources', 'bin', 'orca'),
-    join(dir, '..', 'Resources', 'bin', 'orca-ide')
+    path.join(dir, 'resources', 'bin', 'orca-ide'),
+    path.join(dir, 'resources', 'bin', 'orca'),
+    path.join(dir, '..', 'Resources', 'bin', 'orca'),
+    path.join(dir, '..', 'Resources', 'bin', 'orca-ide')
   ]
-  for (const d of [join(home, '.local', 'bin'), ...String(env.PATH ?? '').split(delimiter)]) {
-    if (d) out.push(join(d, 'orca'), join(d, 'orca-ide'))
+  for (const d of [path.join(home, '.local', 'bin'), ...fromPath]) {
+    if (d) out.push(path.join(d, 'orca'), path.join(d, 'orca-ide'))
   }
   return out
 }
@@ -74,13 +107,34 @@ export function pickPluginKey(listText) {
 }
 
 /** PATH for the commands we run. A GUI app's PATH often lacks these folders. */
-export function commandPath(env, home) {
-  return [join(home, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin', env.PATH ?? '/usr/bin:/bin']
-    .join(delimiter)
+export function commandPath(env, home, platform = process.platform) {
+  const current = env[pathKey(env)]
+  if (platform === 'win32') return [windowsCliDir(env, home), current].filter(Boolean).join(win32.delimiter)
+  return [posix.join(home, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin', current ?? '/usr/bin:/bin'].join(
+    posix.delimiter
+  )
 }
 
-/** Runs a command line in the person's login shell, so it finds what their terminal finds (npx). */
-export function shellCommand(env, command) {
+/** The environment for the commands we run: this one, with commandPath under PATH's own spelling. */
+export function commandEnv(env, home, platform = process.platform) {
+  return { ...env, [pathKey(env)]: commandPath(env, home, platform) }
+}
+
+/**
+ * How to start a command, as [file, args, options] for spawn. On Windows a .cmd (Orca's CLI is orca.cmd) runs only
+ * through cmd.exe, and cmd.exe takes its command line as written: verbatim, the whole line in quotes (/s).
+ */
+export function spawnArgs(file, args, platform = process.platform) {
+  if (platform !== 'win32') return [file, args, {}]
+  if (/(^|[\\/])cmd\.exe$/i.test(file)) return [file, args, { windowsVerbatimArguments: true }]
+  if (!/\.(cmd|bat)$/i.test(file)) return [file, args, {}]
+  const line = [file, ...args].map((part) => (/[\s&|<>^()]/.test(part) ? `"${part}"` : part)).join(' ')
+  return ['cmd.exe', ['/d', '/s', '/c', `"${line}"`], { windowsVerbatimArguments: true }]
+}
+
+/** Runs a command line in the person's login shell, so it finds what their terminal finds (npx); cmd.exe on Windows. */
+export function shellCommand(env, command, platform = process.platform) {
+  if (platform === 'win32') return ['cmd.exe', ['/d', '/s', '/c', `"${command}"`]]
   const shell = typeof env.SHELL === 'string' && env.SHELL.startsWith('/') ? env.SHELL : '/bin/sh'
   return shell === '/bin/sh' ? [shell, ['-c', command]] : [shell, ['-lc', command]]
 }
@@ -227,6 +281,7 @@ export function overview(vms) {
 /** Commands that put text on the clipboard, first that runs wins: pbcopy on macOS; Linux has several. */
 export function copyCommands(platform) {
   if (platform === 'darwin') return [['pbcopy', []]]
+  if (platform === 'win32') return [['clip.exe', []]]
   if (platform === 'linux') {
     return [['wl-copy', []], ['xclip', ['-selection', 'clipboard']], ['xsel', ['--clipboard', '--input']]]
   }
@@ -324,7 +379,6 @@ export function statusBar(state) {
 
 /** What `Shako: Status` shows: where setup stands and the next step. */
 export function statusText(state) {
-  if (!state.supported) return 'Shako needs macOS or Linux. On Windows, use Orca in WSL.'
   if (!state.cli.found) return 'Shako: the CLI is not installed. Open the Shako panel to install it.'
   if (state.login.running) return 'Shako: approve this computer in your browser.'
   if (!state.account.signedIn) return 'Shako: not logged in. Step 3 of the Shako panel logs you in.'

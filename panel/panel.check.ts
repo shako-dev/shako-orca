@@ -3,7 +3,6 @@ import { defineCheck } from 'orca/testing'
 import type { ShakoState } from './protocol'
 
 const base: ShakoState = {
-  supported: true,
   workspaceUrl: 'https://workspace.shako.dev',
   cli: { found: true, path: '/home/u/.local/bin/shako', version: '0.1.0' },
   account: { signedIn: true, tenant: 'newbie', email: 'new@example.com', sshDomain: 'newbie.shako.dev' },

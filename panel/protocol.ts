@@ -34,7 +34,6 @@ export type Credit = {
 }
 
 export type ShakoState = {
-  supported: boolean
   workspaceUrl: string
   cli: { found: boolean; path: string | null; version: string | null }
   account: { signedIn: boolean; tenant: string | null; email: string | null; sshDomain: string | null }

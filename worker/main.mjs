@@ -6,13 +6,14 @@ import { spawn } from 'node:child_process'
 import { access, constants } from 'node:fs/promises'
 import { homedir, hostname } from 'node:os'
 import {
-  INSTALL_COMMAND,
   SKILL_COMMAND,
   WORKSPACE_URL,
   cliCandidates,
-  commandPath,
+  commandEnv,
   copyCommands,
   creditSummary,
+  installCommand,
+  installRun,
   keyName,
   lastLine,
   orcaCliCandidates,
@@ -28,6 +29,7 @@ import {
   pickPluginKey,
   shellCommand,
   skillPaths,
+  spawnArgs,
   statusBar,
   statusText,
   updateDue
@@ -35,8 +37,7 @@ import {
 import { createArgs } from '../shared/vm-options.mjs'
 
 const HOME = homedir()
-const SUPPORTED = process.platform !== 'win32'
-const ENV = { ...process.env, PATH: commandPath(process.env, HOME) }
+const ENV = commandEnv(process.env, HOME, process.platform)
 const POLL_MS = 5 * 60_000
 
 /** The running `shako login`, so Cancel and a stopping worker can end it. */
@@ -58,7 +59,13 @@ function run(file, args, { timeoutMs = 60_000, onOutput, onSpawn, input } = {}) 
     let stderr = ''
     let child
     try {
-      child = spawn(file, args, { env: ENV, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] })
+      const [command, commandArgs, options] = spawnArgs(file, args, process.platform)
+      child = spawn(command, commandArgs, {
+        ...options,
+        env: ENV,
+        stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+        windowsHide: true // no console window on Windows for each command
+      })
     } catch (error) {
       resolve({ code: -1, stdout, stderr: String(error) })
       return
@@ -95,7 +102,7 @@ async function exists(path) {
 }
 
 async function findCli() {
-  for (const path of cliCandidates(process.env, HOME)) {
+  for (const path of cliCandidates(process.env, HOME, process.platform)) {
     if (!(await exists(path))) continue
     const result = await run(path, ['version'], { timeoutMs: 15_000 })
     const version = parseVersion(result.stdout)
@@ -105,7 +112,7 @@ async function findCli() {
 }
 
 async function findOrcaCli() {
-  for (const path of orcaCliCandidates(process.execPath, process.env, HOME)) {
+  for (const path of orcaCliCandidates(process.execPath, process.env, HOME, process.platform)) {
     if (await exists(path)) return path
   }
   return null
@@ -144,11 +151,10 @@ async function syncOrcaHosts(vms, sshDomain, log) {
 /** @type {import('orca/worker').Activate} */
 export default async function activate(orca) {
   const state = {
-    supported: SUPPORTED,
     workspaceUrl: WORKSPACE_URL,
     cli: { found: false, path: null, version: null },
     account: { signedIn: false, tenant: null, email: null, sshDomain: null },
-    install: { running: false, error: null, command: INSTALL_COMMAND },
+    install: { running: false, error: null, command: installCommand(process.platform) },
     login: { running: false, link: null, error: null, keyName: keyName(hostname()) },
     skill: { installed: false, running: false, error: null, command: SKILL_COMMAND },
     vms: [],
@@ -224,14 +230,12 @@ export default async function activate(orca) {
   let refreshing = null
   const refresh = () => {
     refreshing ??= (async () => {
-      if (SUPPORTED) {
-        state.cli = await findCli()
-        await readAccount()
-        let installed = false
-        for (const path of skillPaths(HOME)) installed ||= await exists(path)
-        state.skill.installed = installed
-        state.updatedAt = Date.now()
-      }
+      state.cli = await findCli()
+      await readAccount()
+      let installed = false
+      for (const path of skillPaths(HOME)) installed ||= await exists(path)
+      state.skill.installed = installed
+      state.updatedAt = Date.now()
       await publish()
     })().finally(() => {
       refreshing = null
@@ -239,12 +243,12 @@ export default async function activate(orca) {
     return refreshing
   }
 
-  // The official installer, as its docs give it. It prints why it failed (for example no python3).
+  // The official installer, as its docs give it: install.sh, or install.ps1 on Windows. It prints why it failed.
   const installCli = async () => {
-    if (state.install.running || !SUPPORTED) return state
+    if (state.install.running) return state
     state.install = { ...state.install, running: true, error: null }
     await publish()
-    const result = await run('/bin/sh', ['-c', INSTALL_COMMAND], { timeoutMs: 180_000 })
+    const result = await run(...installRun(process.platform), { timeoutMs: 180_000 })
     state.install.running = false
     if (result.code !== 0) state.install.error = lastLine(result.stderr || result.stdout) || 'install failed'
     await refresh()
@@ -269,10 +273,10 @@ export default async function activate(orca) {
 
   // The skills CLI's own install, in the login shell so it finds the person's npx.
   const installSkill = async () => {
-    if (state.skill.running || !SUPPORTED) return state
+    if (state.skill.running) return state
     state.skill = { ...state.skill, running: true, error: null }
     await publish()
-    const [file, args] = shellCommand(process.env, SKILL_COMMAND)
+    const [file, args] = shellCommand(process.env, SKILL_COMMAND, process.platform)
     const result = await run(file, args, { timeoutMs: 240_000 })
     state.skill.running = false
     if (result.code !== 0) {

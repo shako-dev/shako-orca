@@ -51,5 +51,5 @@ test('overview totals and copy commands', () => {
   assert.equal(diskGb('80G'), 80)
   assert.deepEqual(copyCommands('darwin'), [['pbcopy', []]])
   assert.equal(copyCommands('linux')[0][0], 'wl-copy')
-  assert.deepEqual(copyCommands('win32'), [])
+  assert.deepEqual(copyCommands('win32'), [['clip.exe', []]])
 })

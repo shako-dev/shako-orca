@@ -405,10 +405,6 @@ export default function Panel() {
       {error ? <Text tone="danger" size="sm">{error}</Text> : null}
       {!s ? (
         <Spinner label="Checking setup" />
-      ) : !s.supported ? (
-        <Text tone="warning" size="sm">
-          Shako needs macOS or Linux. On Windows, use Orca in WSL.
-        </Text>
       ) : (
         <Stack gap="sm">
           {setupDone ? null : <Setup s={s} />}

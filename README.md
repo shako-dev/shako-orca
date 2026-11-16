@@ -36,7 +36,7 @@ To install only the skill, without the plugin:
 npx -y skills add https://github.com/shako-dev/shako-orca --skill shako --global -y
 ```
 
-## One VM per workspace (Orca's Cloud VM)
+## One VM per workspace (Orca's Cloud VM, macOS and Linux)
 
 The plugin also adds Orca's VM recipe **Shako VM**: a workspace on it gets its own new VM, which is deleted with the
 workspace.
@@ -60,11 +60,12 @@ Codex. The VM sleeps when idle. The recipe (`recipes/shako-vm.json`) is a short 
 
 It asks Orca for full access (`trusted-worker`), notifications and its own storage. With it, it runs:
 
-- On its first start, only what is missing: the CLI installer
-  (`curl -fsSL https://shako.dev/install.sh | sh`) and the skill installer (the `npx` command above).
+- On its first start, only what is missing: the CLI installer (`curl -fsSL https://shako.dev/install.sh | sh`;
+  on Windows, `irm https://shako.dev/install.ps1 | iex` in PowerShell) and the skill installer (the `npx`
+  command above).
   The panel's buttons run the same commands again after a failure.
-- `shako login` on its first start when you are not signed in, and when you press the status bar
-  item or **Sign up or sign in**. The CLI opens the sign-up page in your browser.
+- `shako login` on its first start when you are not logged in, and when you press **Log in or sign up**.
+  The CLI opens the log-in or sign-up page in your browser.
 - `orca plugin open`, Orca's own command, to show the Shako panel: on its first start, after you
   sign in, and when you press the status bar item.
 - `shako version`, `shako whoami`, `shako vm ls`, `shako vm info <vm>` (awake VMs) and
@@ -78,8 +79,9 @@ holds one flag: whether the first start is done.
 
 ## Requirements
 
-macOS or Linux (on Windows, Orca in WSL), `curl`, python3 3.10 or newer for the CLI, and Node.js
-(`npx`) for the skill installer.
+macOS, Linux or Windows 10/11 (the shako CLI is one file for each). Node.js (`npx`) for the skill installer.
+The **Shako VM** recipe needs macOS or Linux for now: on Windows, Orca runs a recipe's commands in `cmd.exe`, and
+the recipe is a shell script.
 
 ## Develop
 

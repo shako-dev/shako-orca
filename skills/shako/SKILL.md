@@ -19,9 +19,10 @@ a sleep, so running programs continue after a wake. The user pays per hour, less
 
 Run `shako whoami`.
 
-- **Command not found:** try `~/.local/bin/shako whoami`. If that also fails, the CLI is not
-  installed. Ask the user to open the Shako panel in Orca, or to run
-  `curl -fsSL https://shako.dev/install.sh | sh` (needs python3 3.10+).
+- **Command not found:** try `~/.local/bin/shako whoami` (on Windows,
+  `& "$env:LOCALAPPDATA\shako\bin\shako.exe" whoami`). If that also fails, the CLI is not installed. Ask the
+  user to open the Shako panel in Orca, or to run `curl -fsSL https://shako.dev/install.sh | sh` (macOS, Linux)
+  or, in PowerShell, `irm https://shako.dev/install.ps1 | iex` (Windows).
 - **Not logged in:** ask the user to run `shako login`. It opens a browser page where they sign
   up or sign in and approve this computer; the approval registers this computer's SSH key. You
   cannot approve for them.
@@ -48,6 +49,8 @@ Run `shako <noun> <verb> --help` before using a command you have not used in thi
 - **Secrets:** copy `.env` files only when the user agrees. Never print secrets.
 - **Listen on `0.0.0.0`,** not `127.0.0.1`, for a port you share.
 - Prefer `shako vm ls` and `shako port ls <vm>` to find what exists before you make more.
+- **Windows PowerShell 5.1** drops each `"` in an ssh argument: `scp` a script to the VM, then
+  `ssh <vm>... 'bash script.sh'`.
 
 ## 1. Create a VM
 

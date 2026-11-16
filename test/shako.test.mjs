@@ -4,7 +4,10 @@ import { test } from 'node:test'
 import {
   SKILL_COMMAND,
   cliCandidates,
+  commandEnv,
   commandPath,
+  copyCommands,
+  installRun,
   creditSummary,
   creditTone,
   formatDays,
@@ -23,6 +26,7 @@ import {
   pickPluginKey,
   runwayDays,
   shellCommand,
+  spawnArgs,
   skillPaths,
   spendPerHour,
   statusBar,
@@ -137,7 +141,6 @@ test('credit: balance, spend now and how long it lasts', () => {
 
 function state(overrides) {
   return {
-    supported: true,
     cli: { found: true, path: '/x', version: '1' },
     account: { signedIn: true, tenant: 'acme', email: 'me@example.com' },
     skill: { installed: true, command: SKILL_COMMAND },
@@ -164,7 +167,6 @@ test('status bar and status text follow setup and credit', () => {
   assert.match(statusText(state({ cli: { found: false } })), /not installed/)
   assert.match(statusText(state({ skill: { installed: false } })), /npx -y skills add/)
   assert.match(statusText(state()), /0 VMs\. \$12\.50 left/)
-  assert.match(statusText(state({ supported: false })), /WSL/)
 })
 
 test('finds Orca\'s CLI next to the app, and this plugin\'s key', () => {
@@ -223,4 +225,41 @@ test('shako update is due once a day, and at the first start', () => {
   assert.equal(updateDue(null, now), true)
   assert.equal(updateDue(now - UPDATE_EVERY_MS + 1, now), false)
   assert.equal(updateDue(now - UPDATE_EVERY_MS, now), true)
+})
+
+test('Windows: the CLI of install.ps1, Orca\'s orca.cmd, cmd.exe, PowerShell and the Path spelling', () => {
+  const env = { Path: 'C:\\Windows\\system32;C:\\tools', LOCALAPPDATA: 'C:\\Users\\Jane Doe\\AppData\\Local' }
+  const home = 'C:\\Users\\Jane Doe'
+  assert.deepEqual(cliCandidates(env, home, 'win32'), [
+    'C:\\Users\\Jane Doe\\AppData\\Local\\shako\\bin\\shako.exe',
+    'C:\\Windows\\system32\\shako.exe',
+    'C:\\tools\\shako.exe'
+  ])
+  // Windows spells it Path: the folder of install.ps1 goes in that key, and no second PATH key appears.
+  const out = commandEnv(env, home, 'win32')
+  assert.equal(out.Path, 'C:\\Users\\Jane Doe\\AppData\\Local\\shako\\bin;C:\\Windows\\system32;C:\\tools')
+  assert.equal('PATH' in out, false)
+  assert.equal(commandPath({ PATH: '/usr/bin' }, '/home/u', 'linux'), '/home/u/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin')
+
+  const orca = 'C:\\Users\\Jane Doe\\AppData\\Local\\Programs\\Orca\\Orca.exe'
+  assert.equal(orcaCliCandidates(orca, env, home, 'win32')[0], 'C:\\Users\\Jane Doe\\AppData\\Local\\Programs\\Orca\\resources\\bin\\orca.cmd')
+  // A .cmd runs through cmd.exe, the whole line in quotes, a path with a space quoted too.
+  const cmd = 'C:\\Program Files\\Orca\\resources\\bin\\orca.cmd'
+  assert.deepEqual(spawnArgs(cmd, ['host', 'rm', '--host', 'ssh:web1', '--json'], 'win32'), [
+    'cmd.exe',
+    ['/d', '/s', '/c', '""C:\\Program Files\\Orca\\resources\\bin\\orca.cmd" host rm --host ssh:web1 --json"'],
+    { windowsVerbatimArguments: true }
+  ])
+  assert.deepEqual(spawnArgs('C:\\x\\shako.exe', ['whoami'], 'win32'), ['C:\\x\\shako.exe', ['whoami'], {}])
+  assert.deepEqual(spawnArgs('/opt/Orca/resources/bin/orca-ide', ['host', 'list'], 'linux'), ['/opt/Orca/resources/bin/orca-ide', ['host', 'list'], {}])
+  const [shell, shellArgs] = shellCommand({}, 'npx -y skills add x', 'win32')
+  assert.deepEqual([shell, shellArgs], ['cmd.exe', ['/d', '/s', '/c', '"npx -y skills add x"']])
+  assert.deepEqual(spawnArgs(shell, shellArgs, 'win32')[2], { windowsVerbatimArguments: true })
+
+  assert.deepEqual(installRun('win32'), [
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', 'irm https://shako.dev/install.ps1 | iex']
+  ])
+  assert.deepEqual(installRun('darwin'), ['/bin/sh', ['-c', 'curl -fsSL https://shako.dev/install.sh | sh']])
+  assert.deepEqual(copyCommands('win32'), [['clip.exe', []]])
 })
