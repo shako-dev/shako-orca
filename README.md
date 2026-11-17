@@ -45,17 +45,20 @@ workspace.
 2. Create a workspace and choose **Shako VM** under **Run on**.
 
 The VM clones the project from its Git host itself, so no code is uploaded from your laptop: a large repo
-takes seconds, not minutes. The recipe reads no token on your computer and forwards no SSH agent: the VM clones
-over HTTPS with only the Git access it has itself. A public repo needs none. For a private repo, give your VM
-`orca-base` Git access once, and every workspace VM, a copy of it, has it too. When the clone fails, the recipe
-stops and prints the command for your Git host; for GitHub:
+takes seconds, not minutes. The recipe reads no token on your computer and forwards no SSH agent. A public repo needs
+no access. For a private GitHub repo, save your GitHub token once as a Shako secret:
 
 ```sh
-gh auth token | ssh orca-base.<tenant>.shako.dev 'umask 077 && git config --global credential.helper store && printf "protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n\n" "$(cat)" | git credential approve'
+gh auth token | shako secret set GH_TOKEN --host github.com --host api.github.com
 ```
 
-A fine-grained token that covers only your repositories works the same way. The workspace's start commit must be
-pushed; if it is not, the recipe stops at once and says so. Nothing waits for input.
+Shako keeps it encrypted, and it never goes into a VM. Each of your VMs gets only a placeholder
+(`GH_TOKEN=shako-secret-GH_TOKEN`, and a Git credential with the same value), and Shako puts the real token in
+place of the placeholder only in the VM's requests to GitHub. So `git clone`, `git push` and `gh` work in every VM,
+and Orca's check of `origin` passes. A fine-grained token that covers only your repositories works the same way.
+`shako secret ls` lists your secrets, and `shako secret rm GH_TOKEN` removes the token from all your VMs. When the
+clone fails, the recipe stops and prints this command. The workspace's start commit must be pushed; if it is not,
+the recipe stops at once and says so. Nothing waits for input.
 
 The VM is a copy of your VM `orca-base` when you have one, so its agents stay logged in: make one, log in your
 agents there, and every workspace starts ready. Without it, each workspace gets a new small VM with Claude Code and

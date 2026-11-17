@@ -68,6 +68,10 @@ Run commands in the VM with `ssh <name>.<tenant>.shako.dev '<command>'`. For lon
 1. Create the VM (step 1), or reuse one from `shako vm ls`.
 2. Copy the code. From a Git remote the VM can reach: `ssh <vm>... 'git clone <url> app'`. From
    this computer: `rsync -az --exclude .git --exclude node_modules ./ <name>.<tenant>.shako.dev:app/`.
+   A private GitHub repo clones over HTTPS when the user saved a GitHub token as a Shako secret
+   (`shako secret ls` shows `GH_TOKEN`). The VM holds only a placeholder; Shako adds the token to its
+   requests to GitHub. If there is none, ask the user to run this once themselves; never read or copy
+   a token for them: `gh auth token | shako secret set GH_TOKEN --host github.com --host api.github.com`.
 3. Install the runtime and dependencies in the VM (`sudo apt-get install -y ...`, `npm ci`,
    `pip install -r requirements.txt`, ...).
 4. Run it as a systemd service so it restarts after a reboot or crash:
